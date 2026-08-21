@@ -18,9 +18,12 @@ export const metadata: Metadata = {
   keywords: ["Cisco", "Zero-Trust", "Cyber Security", "Packet Tracer", "Terraform", "Kubernetes", "ASA Firewall", "Hybrid Data Center", "DevSecOps", "Cloud Security"],
   authors: [{ name: "Krishna Mohan", url: "https://www.linkedin.com/in/krishna-mohan-kumar/" }],
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/cisco-logo.png",
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/cisco-logo.png', type: 'image/png' },
+    ],
+    shortcut: '/cisco-logo.png',
+    apple: '/cisco-logo.png',
   },
   openGraph: {
     title: "Cisco Zero-Trust Hybrid Data Center Simulation | Cyber Track 2026",
