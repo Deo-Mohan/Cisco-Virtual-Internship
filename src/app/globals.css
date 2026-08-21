@@ -133,7 +133,20 @@
 
 [data-theme='light'] .network-node text {
   fill: #0f172a !important;
-  font-weight: 700 !important;
+  font-weight: 800 !important;
+}
+
+[data-theme='light'] .network-svg text {
+  fill: #1e293b !important;
+}
+
+[data-theme='light'] .network-node path[stroke="#fff"] {
+  stroke: #0f172a !important;
+}
+
+[data-theme='light'] .network-node circle[fill="#080e1a"],
+[data-theme='light'] .network-node rect[fill="#080e1a"] {
+  fill: #ffffff !important;
 }
 
 [data-theme='light'] select,
