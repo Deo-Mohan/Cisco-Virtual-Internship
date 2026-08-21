@@ -149,6 +149,42 @@
   fill: #ffffff !important;
 }
 
+[data-theme='light'] .footer-col h4 {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+[data-theme='light'] .footer-logo {
+  color: #0f172a !important;
+}
+
+[data-theme='light'] .footer-col.links a {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+[data-theme='light'] .footer-col.links a:hover {
+  color: hsl(196, 100%, 32%) !important;
+}
+
+[data-theme='light'] .footer-col.info p {
+  color: #475569 !important;
+}
+
+[data-theme='light'] .footer-col.info strong {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+[data-theme='light'] .footer-col.brand p {
+  color: #334155 !important;
+}
+
+[data-theme='light'] .footer-bottom p {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
 [data-theme='light'] select,
 [data-theme='light'] input {
   background-color: #ffffff !important;
