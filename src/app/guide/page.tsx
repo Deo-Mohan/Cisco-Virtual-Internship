@@ -133,15 +133,15 @@ export default function GuidePage() {
           <div className="panel-header">
             <h3 className="panel-title">📋 Table of Contents</h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
-            <a href="#section-1" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>1. Prerequisites</a>
-            <a href="#section-2" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>2. Getting Started — Web Portal</a>
-            <a href="#section-3" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>3. Understanding the Dashboard</a>
-            <a href="#section-4" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>4. Running the Threat Simulator</a>
-            <a href="#section-5" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>5. Using with Cisco Packet Tracer</a>
-            <a href="#section-6" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>6. IaC Explorer & Security Policies</a>
-            <a href="#section-7" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>7. Interpreting Visual Indicators</a>
-            <a href="#section-8" style={{ color: 'var(--cisco-blue)', textDecoration: 'none' }}>8. Troubleshooting</a>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
+            <a href="#section-1" className="guide-toc-link">1. Prerequisites</a>
+            <a href="#section-2" className="guide-toc-link">2. Getting Started — Web Portal</a>
+            <a href="#section-3" className="guide-toc-link">3. Understanding the Dashboard</a>
+            <a href="#section-4" className="guide-toc-link">4. Running the Threat Simulator</a>
+            <a href="#section-5" className="guide-toc-link">5. Using with Cisco Packet Tracer</a>
+            <a href="#section-6" className="guide-toc-link">6. IaC Explorer & Security Policies</a>
+            <a href="#section-7" className="guide-toc-link">7. Interpreting Visual Indicators</a>
+            <a href="#section-8" className="guide-toc-link">8. Troubleshooting</a>
           </div>
         </div>
 
