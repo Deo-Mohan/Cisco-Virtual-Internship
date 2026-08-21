@@ -1473,7 +1473,11 @@ Configuration:
           <p>© 2026 Cisco Virtual Internship — | Designed & Built With ❤️ by <strong>Krishna Mohan</strong></p>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <a href="#" onClick={(e) => { e.preventDefault(); resetSimulation(); }}>🔁 Restore Security Matrix</a>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>v2.0</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+              <span>Powered by</span>
+              <img src="/cisco-logo.png" alt="Cisco Logo" style={{ width: '18px', height: '18px', borderRadius: '4px', objectFit: 'cover' }} />
+              <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>Cisco</span>
+            </div>
           </div>
         </div>
       </footer>
