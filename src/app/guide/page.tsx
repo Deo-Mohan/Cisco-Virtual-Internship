@@ -8,6 +8,11 @@ export default function GuidePage() {
   const [isExporting, setIsExporting] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // Sync global document theme attribute
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   const handleDownloadPdf = async () => {
     setIsExporting(true);
     try {
@@ -16,10 +21,44 @@ export default function GuidePage() {
 
       if (!contentRef.current) return;
 
-      const canvas = await html2canvas(contentRef.current, {
+      const element = contentRef.current;
+      
+      // Render canvas with clean white background and high-contrast text rendering
+      const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        backgroundColor: theme === 'dark' ? '#04070f' : '#f8fafc',
+        backgroundColor: '#ffffff',
+        onclone: (clonedDoc) => {
+          const clonedContent = clonedDoc.querySelector('[data-pdf-content]') as HTMLElement;
+          if (clonedContent) {
+            clonedContent.style.background = '#ffffff';
+            clonedContent.style.color = '#0f172a';
+          }
+          // Force high contrast on cloned panels for crisp print
+          const panels = clonedDoc.querySelectorAll('.panel');
+          panels.forEach((p) => {
+            (p as HTMLElement).style.background = '#ffffff';
+            (p as HTMLElement).style.color = '#0f172a';
+            (p as HTMLElement).style.borderColor = '#cbd5e1';
+            (p as HTMLElement).style.boxShadow = 'none';
+          });
+          const headings = clonedDoc.querySelectorAll('h1, h2, h3, h4, .panel-title');
+          headings.forEach((h) => {
+            (h as HTMLElement).style.color = '#0f172a';
+          });
+          const texts = clonedDoc.querySelectorAll('p, li, td, span');
+          texts.forEach((t) => {
+            if (!(t as HTMLElement).classList.contains('badge') && !(t as HTMLElement).classList.contains('live-dot')) {
+              (t as HTMLElement).style.color = '#1e293b';
+            }
+          });
+          const codeBlocks = clonedDoc.querySelectorAll('pre');
+          codeBlocks.forEach((c) => {
+            (c as HTMLElement).style.background = '#f1f5f9';
+            (c as HTMLElement).style.color = '#0f172a';
+            (c as HTMLElement).style.borderColor = '#cbd5e1';
+          });
+        }
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -27,20 +66,20 @@ export default function GuidePage() {
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      const imgWidth = pdfWidth - 20; // 10mm margins on left/right
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
       let heightLeft = imgHeight;
-      let position = 0;
+      let position = 10; // 10mm top margin
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - 20);
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 10;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= (pdfHeight - 20);
       }
 
       pdf.save('Cisco_Zero_Trust_Working_Guideline.pdf');
@@ -104,7 +143,7 @@ export default function GuidePage() {
             className="btn btn-secondary"
             style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            📝 View raw WORKING_GUIDELINE.md
+            📝 View WORKING_GUIDELINE.md
           </a>
 
           <a 

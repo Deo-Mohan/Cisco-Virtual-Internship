@@ -61,10 +61,22 @@
   --shadow-md: 0 12px 40px 0 rgba(0, 0, 0, 0.08);
 }
 
+[data-theme='light'] body,
+[data-theme='light'] html {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
 [data-theme='light'] .logo-text h1 {
-  background: linear-gradient(to right, #0f172a, #334155);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: none !important;
+  -webkit-text-fill-color: initial !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+[data-theme='light'] .logo-text p {
+  color: #334155 !important;
+  font-weight: 600 !important;
 }
 
 [data-theme='light'] .panel-title {
