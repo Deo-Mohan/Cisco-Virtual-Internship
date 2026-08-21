@@ -1463,7 +1463,7 @@ Configuration:
           </div>
           <div className="footer-col info">
             <h4>Intern Credentials</h4>
-            <p><strong>Candidate ID:</strong> Cisco-VI-2026-9281</p>
+            <p><strong>Candidate Name:</strong> Krishna Mohan</p>
             <p><strong>Focus Area:</strong> Cloud Security & DevSecOps</p>
             <p><strong>System Link:</strong> <span className="status-indicator-green">Tunnel Secured</span></p>
             <p style={{ marginTop: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>Built with Next.js • React • SVG Animation Engine</p>
