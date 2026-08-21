@@ -1,69 +1,981 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
+
+// node structure for the topology map
+interface NetworkNode {
+  id: string;
+  name: string;
+  ip: string;
+  type: 'onprem' | 'hub' | 'spoke' | 'internet' | 'vpn';
+  role: string;
+  status: 'active' | 'threat' | 'inactive';
+  description: string;
+  details: string[];
+}
+
+// syslog/network traffic log structure
+interface LogEntry {
+  timestamp: string;
+  source: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'danger' | 'cisco';
+}
+
+const initialNodes: NetworkNode[] = [
+  {
+    id: 'internet',
+    name: 'External Internet',
+    ip: 'Any (0.0.0.0/0)',
+    type: 'internet',
+    role: 'Public Gateway',
+    status: 'active',
+    description: 'External ingress and public network access.',
+    details: ['Only Port 443 (HTTPS) allowed to Public Load Balancers', 'All other traffic rejected by default']
+  },
+  {
+    id: 'onprem',
+    name: 'Private Data Center',
+    ip: '10.10.0.0/16',
+    type: 'onprem',
+    role: 'Corporate Core',
+    status: 'active',
+    description: 'On-premises legacy systems and database master nodes.',
+    details: ['Host-based firewall enabled', 'Connected via redundant IPsec VPN', 'Direct routes restricted to Hub VPC']
+  },
+  {
+    id: 'vpn',
+    name: 'Cisco ASA Security Gateway',
+    ip: '10.10.1.1 / 198.51.100.1',
+    type: 'vpn',
+    role: 'VPN Gateway',
+    status: 'active',
+    description: 'Cisco ASA 5506-X endpoint establishing the IPsec hybrid link.',
+    details: ['IKEv2 with AES-256 encryption', 'SHA-256 integrity hashing', 'Zero-Trust Access Control Lists (ACLs)']
+  },
+  {
+    id: 'hub',
+    name: 'Transit Hub VPC',
+    ip: '10.0.0.0/16',
+    type: 'hub',
+    role: 'Inspection & Routing',
+    status: 'active',
+    description: 'Central transit VPC hosting routing services and security inspection.',
+    details: ['AWS Transit Gateway hub', 'Simulated Cisco Secure Firewall Virtual appliance', 'Log Sink exporting VPC Flow Logs']
+  },
+  {
+    id: 'spoke-student',
+    name: 'Student Spoke VPC',
+    ip: '10.1.0.0/16',
+    type: 'spoke',
+    role: 'Student Services',
+    status: 'active',
+    description: 'Hosting the Student Portal application and records.',
+    details: ['Subnets: Public Ingress, Private App, Isolated Data', 'Role-Based Access Control (RBAC) active', 'Student-App and Student-DB workloads']
+  },
+  {
+    id: 'spoke-faculty',
+    name: 'Faculty Spoke VPC',
+    ip: '10.2.0.0/16',
+    type: 'spoke',
+    role: 'Faculty & Exam Portals',
+    status: 'active',
+    description: 'Restricted VPC for academic management and exam hosting.',
+    details: ['Faculty-App and Exam-App namespaces', 'Default-deny K8s NetworkPolicies', 'Explicit allow only for Exam-App to Exam-DB']
+  },
+  {
+    id: 'spoke-research',
+    name: 'Research Spoke VPC',
+    ip: '10.3.0.0/16',
+    type: 'spoke',
+    role: 'Research Sandbox',
+    status: 'active',
+    description: 'VPC hosting isolated research and data-crunching resources.',
+    details: ['Research-App and Research-DB workloads', 'Default-deny egress to other Spokes', 'Vulnerable app endpoint targeted in simulation']
+  }
+];
+
+const mockCodeFiles = {
+  terraform: `# Hub and Spoke VPC setup for the hybrid data center
+# Using Terraform to provision network segments
+
+resource "aws_vpc" "hub" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  tags = {
+    Name = "cisco-cybertrack-hub-vpc"
+    Role = "Transit-Inspection"
+  }
+}
+
+resource "aws_vpc" "student" {
+  cidr_block           = "10.1.0.0/16"
+  enable_dns_hostnames = true
+  tags = {
+    Name = "spoke-student-vpc"
+    Tier = "Student-Services"
+  }
+}
+
+resource "aws_vpc" "faculty" {
+  cidr_block           = "10.2.0.0/16"
+  enable_dns_hostnames = true
+  tags = {
+    Name = "spoke-faculty-exam-vpc"
+    Tier = "Academic-Administration"
+  }
+}
+
+resource "aws_vpc" "research" {
+  cidr_block           = "10.3.0.0/16"
+  enable_dns_hostnames = true
+  tags = {
+    Name = "spoke-research-vpc"
+    Tier = "Research-Sandbox"
+  }
+}
+
+# peering spokes back to hub - no spoke-to-spoke direct routing allowed
+resource "aws_vpc_peering_connection" "hub_to_student" {
+  vpc_id        = aws_vpc.hub.id
+  peer_vpc_id   = aws_vpc.student.id
+  auto_accept   = true
+  tags          = { Name = "peering-hub-student" }
+}
+
+resource "aws_vpc_peering_connection" "hub_to_faculty" {
+  vpc_id        = aws_vpc.hub.id
+  peer_vpc_id   = aws_vpc.faculty.id
+  auto_accept   = true
+  tags          = { Name = "peering-hub-faculty" }
+}
+
+resource "aws_vpc_peering_connection" "hub_to_research" {
+  vpc_id        = aws_vpc.hub.id
+  peer_vpc_id   = aws_vpc.research.id
+  auto_accept   = true
+  tags          = { Name = "peering-hub-research" }
+}`,
+  k8s: `# K8s network policy to isolate our pods
+# Block everything by default and open only what is needed
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: research
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# allow research app to query its database on port 5432
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-research-db-ingress
+  namespace: research
+spec:
+  podSelector:
+    matchLabels:
+      app: research-db
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: research-app
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# restrict outbound traffic from research pods (block lateral movement)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-research-egress
+  namespace: research
+spec:
+  podSelector:
+    matchLabels:
+      app: research-app
+  policyTypes:
+  - Egress
+  egress:
+  # only talk to database and local DNS
+  - to:
+    - podSelector:
+        matchLabels:
+          app: research-db
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53`,
+  iam: `# IAM configuration for pods (Workload Identity)
+# Least-privilege roles for the apps
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ResearchAppLeastPrivilege",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::cisco-research-data-bucket/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalTag/Workload": "research-app"
+        }
+      }
+    },
+    {
+      "Sid": "DenyUnusedServices",
+      "Effect": "Deny",
+      "Action": [
+        "iam:*",
+        "rds:*",
+        "ec2:*",
+        "eks:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}`,
+  ciscoConfig: `! Cisco ASA Firewall configurations
+! Enforce Access Control Lists (ACLs) to block transit traffic between spokes
+
+interface GigabitEthernet1/1
+ nameif outside
+ security-level 0
+ ip address 198.51.100.1 255.255.255.252
+!
+interface GigabitEthernet1/2
+ nameif inside
+ security-level 100
+ ip address 10.10.1.1 255.255.255.0
+!
+! deny traffic from research (10.3.0.0) to student (10.1.0.0) and faculty/exam (10.2.0.0)
+access-list SEGMENTATION-ASA extended deny ip 10.3.0.0 255.255.0.0 10.1.0.0 255.255.0.0
+access-list SEGMENTATION-ASA extended deny ip 10.3.0.0 255.255.0.0 10.2.0.0 255.255.0.0
+! allow db traffic for the research segment
+access-list SEGMENTATION-ASA extended permit tcp 10.3.0.0 255.255.0.0 host 10.3.2.10 eq 5432
+! bind access control list to the outside interface
+access-group SEGMENTATION-ASA in interface outside
+!
+! VPN tunnel setup to on-premises gateway (10.10.0.0)
+crypto ikev2 policy 10
+ encryption aes-256
+ integrity sha256
+ group 19
+ lifetime seconds 86400
+!
+crypto ipsec ikev2 ipsec-proposal PROPOSAL-AES256
+ protocol esp encryption aes-256
+ protocol esp integrity sha-256
+!
+crypto map MAP-HYBRID 10 match address IPSEC-ACL
+crypto map MAP-HYBRID 10 set peer 203.0.113.2
+crypto map MAP-HYBRID 10 set ikev2 ipsec-proposal PROPOSAL-AES256
+crypto map MAP-HYBRID interface outside`
+};
 
 export default function Home() {
+  const [nodes, setNodes] = useState<NetworkNode[]>(initialNodes);
+  const [selectedNode, setSelectedNode] = useState<NetworkNode | null>(initialNodes[3]); // hub vpc selected first
+  const [activeTab, setActiveTab] = useState<'logs' | 'packet-tracer' | 'cisco-mapping'>('logs');
+  const [activeBottomTab, setActiveBottomTab] = useState<'iac' | 'sg-rules' | 'k8s-policies'>('iac');
+  const [selectedFile, setSelectedFile] = useState<'terraform' | 'k8s' | 'iam' | 'ciscoConfig'>('terraform');
+  const [copiedStatus, setCopiedStatus] = useState<boolean>(false);
+  
+  const [simulationState, setSimulationState] = useState<'idle' | 'running' | 'contained'>('idle');
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { timestamp: '13:46:02', source: 'SYS', message: 'Zero-Trust Hybrid Data Center security monitor online.', type: 'info' },
+    { timestamp: '13:46:05', source: 'VPN', message: 'IPsec tunnel established with Private Data Center 10.10.0.0/16.', type: 'success' },
+    { timestamp: '13:46:10', source: 'K8S', message: 'Kubernetes NetworkPolicies synchronized across 4 namespaces.', type: 'info' },
+    { timestamp: '13:46:15', source: 'FW', message: 'Cisco Secure Firewall virtual appliance reports 0 active violations.', type: 'success' }
+  ]);
+  
+  const consoleEndRef = useRef<HTMLDivElement>(null);
+
+  // auto scroll logs to bottom whenever they update
+  useEffect(() => {
+    if (consoleEndRef.current) {
+      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs]);
+
+  const addLog = (source: string, message: string, type: 'info' | 'success' | 'warning' | 'danger' | 'cisco') => {
+    const time = new Date().toTimeString().split(' ')[0];
+    setLogs((prev) => [...prev, { timestamp: time, source, message, type }]);
+  };
+
+  // kick off mock lateral movement attack simulation
+  const runAttackSimulation = () => {
+    if (simulationState === 'running') return;
+    
+    setSimulationState('running');
+    setLogs([]); // flush log screen
+    
+    // flag the research spoke node as vulnerable
+    setNodes((prev) =>
+      prev.map((n) => (n.id === 'spoke-research' ? { ...n, status: 'threat' } : n))
+    );
+
+    let step = 0;
+    const interval = setInterval(() => {
+      switch (step) {
+        case 0:
+          addLog('SEC-TEAM', '⚠️ INTIALIZING SIMULATION: Compromising vulnerable Research-App container (Section 14)...', 'warning');
+          break;
+        case 1:
+          addLog('ATTACKER', '😈 SSH Key-compromise achieved on Pod research-app-9c4456-x72j.', 'danger');
+          addLog('ATTACKER', '😈 Local host scanning initiated from 10.3.1.15...', 'danger');
+          break;
+        case 2:
+          addLog('ATTACKER', '⚡ Attempting lateral movement: Connect to Student Spoke VPC (10.1.0.0/16)...', 'danger');
+          break;
+        case 3:
+          addLog('VPC-FIREWALL', '⛔ VPC Flow Logs Alert: Connection block from 10.3.1.15 to Student Ingress (10.1.1.5:80).', 'warning');
+          addLog('CISCO-FW', '🛡️ Cisco Secure Firewall Virtual blocked cross-spoke traffic (No transitive routing).', 'success');
+          break;
+        case 4:
+          addLog('ATTACKER', '⚡ Attempting lateral movement: Connect to Exam Portal database (10.2.2.10:5432)...', 'danger');
+          break;
+        case 5:
+          addLog('K8S-POLICY', '⛔ Kubernetes audit log: NetworkPolicy "default-deny-all" blocked egress TCP egress to namespace "faculty-exam".', 'warning');
+          addLog('CISCO-ISE', '🛡️ Cisco ISE Identity binding validates pod credentials and enforces containment segment.', 'success');
+          break;
+        case 6:
+          addLog('ATTACKER', '⚡ Attempting to access Kubernetes Control Plane API Server...', 'danger');
+          break;
+        case 7:
+          addLog('K8S-API', '⛔ Request Blocked. Namespace "research" restricted from accessing Kube-API endpoint.', 'warning');
+          break;
+        case 8:
+          addLog('ATTACKER', '⚡ Attempting database connection: Access local Research Database (10.3.2.10:5432)...', 'info');
+          break;
+        case 9:
+          addLog('K8S-POLICY', '✅ Connection ALLOWED: Policy "allow-research-db-ingress" permits local database access.', 'success');
+          addLog('ATTACKER', '🔓 Read/Write access to local Research Database established.', 'info');
+          break;
+        case 10:
+          addLog('SEC-TEAM', '🛡️ Containment Analysis: Attack Blast-Radius confined 100% to Research Namespace.', 'success');
+          addLog('SEC-TEAM', '🎉 VERIFIED: Zero-Trust policies prevented lateral movement and privilege escalation.', 'success');
+          addLog('SEC-TEAM', '📄 Report exported as task artifact: security_audit_report_phase7.md', 'info');
+          setSimulationState('contained');
+          clearInterval(interval);
+          break;
+        default:
+          break;
+      }
+      step++;
+    }, 1500);
+  };
+
+  const resetSimulation = () => {
+    setSimulationState('idle');
+    setNodes(initialNodes);
+    setLogs([
+      { timestamp: new Date().toTimeString().split(' ')[0], source: 'SYS', message: 'System simulation reset to normal state.', type: 'info' },
+      { timestamp: new Date().toTimeString().split(' ')[0], source: 'FW', message: 'Zero-Trust policies restored.', type: 'success' }
+    ]);
+  };
+
+  // generate dummy packet tracer file for user download
+  const downloadPktFile = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const pktContent = `Cisco Packet Tracer Topology Config Export
+Project: Cisco Virtual Internship 2026 - Cyber Security Track
+Target Topology: Secure Hybrid Data Center (PRD_cybertrack)
+Configuration: 
+- Hub VPC Router: Cisco 2911 (configured with 4 Subinterfaces)
+- Spoke VPCs: Subnets 10.1.0.0/16, 10.2.0.0/16, 10.3.0.0/16
+- VPN Gateway: Cisco ASA 5506-X (External IP 198.51.100.1, Inside 10.10.1.1)
+- On-Prem Router: Cisco 2911 (Subnets 10.10.0.0/16)
+- IPsec Tunnel: IKEv2 AES-256 SHA-256 ESP
+
+[To open this in Cisco Packet Tracer, create the devices matching above parameters, and load cisco-asa.cfg config file]`;
+
+    const blob = new Blob([pktContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cisco_hybrid_datacenter.pkt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(mockCodeFiles[selectedFile]);
+    setCopiedStatus(true);
+    setTimeout(() => {
+      setCopiedStatus(false);
+    }, 2000);
+  };
+
+  // parser to colorize configuration code strings
+  const renderHighlightedCode = (code: string) => {
+    return (
+      <pre className="repo-code-pre">
+        {code.split('\n').map((line, idx) => {
+          const trimmed = line.trim();
+          
+          // Comment highlighting
+          if (trimmed.startsWith('#') || trimmed.startsWith('//') || trimmed.startsWith('!')) {
+            return <div key={idx}><span className="code-comment">{line}</span></div>;
+          }
+          
+          // Basic keyword highlight for Terraform/YAML/JSON/ASA
+          if (trimmed.startsWith('resource') || trimmed.startsWith('variable') || trimmed.startsWith('output') || trimmed.startsWith('provider')) {
+            const parts = line.split('"');
+            if (parts.length > 1) {
+              return (
+                <div key={idx}>
+                  <span className="code-keyword">{parts[0]}</span>
+                  {parts.slice(1).map((p, i) => i % 2 === 0 ? <span key={i} className="code-resource">"{p}"</span> : <span key={i}>"{p}"</span>)}
+                </div>
+              );
+            }
+          }
+          
+          if (trimmed.startsWith('apiVersion:') || trimmed.startsWith('kind:') || trimmed.startsWith('metadata:') || trimmed.startsWith('spec:')) {
+            const parts = line.split(':');
+            return (
+              <div key={idx}>
+                <span className="code-keyword">{parts[0]}:</span>
+                <span className="code-string">{parts.slice(1).join(':')}</span>
+              </div>
+            );
+          }
+
+          if (trimmed.startsWith('interface') || trimmed.startsWith('crypto') || trimmed.startsWith('access-list') || trimmed.startsWith('access-group')) {
+            const words = line.split(' ');
+            return (
+              <div key={idx}>
+                <span className="code-keyword">{words[0]}</span>{' '}
+                <span className="code-property">{words.slice(1).join(' ')}</span>
+              </div>
+            );
+          }
+          
+          return <div key={idx}>{line}</div>;
+        })}
+      </pre>
+    );
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="container">
+      {/* Header metrics bar */}
+      <header>
+        <div className="logo-section">
+          <div className="logo-icon">C</div>
+          <div className="logo-text">
+            <h1>Cisco Hybrid Data Center Simulator</h1>
+            <p>Zero-Trust Reference Architecture & Simulation Hub</p>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          {simulationState === 'idle' && (
+            <div className="badge badge-success">
+              <span className="live-dot"></span> SECURE (Normal Traffic)
+            </div>
+          )}
+          {simulationState === 'running' && (
+            <div className="badge badge-danger" style={{ animation: 'pulseRed 1s infinite' }}>
+              <span className="live-dot threat"></span> ATTACK IN PROGRESS
+            </div>
+          )}
+          {simulationState === 'contained' && (
+            <div className="badge badge-primary">
+              <span className="live-dot"></span> THREAT CONTAINED
+            </div>
+          )}
         </div>
-      </main>
+      </header>
+
+      {/* Real-time stats HUD */}
+      <div className="stats-hud">
+        <div className="stat-card">
+          <span className="stat-label">System Integrity</span>
+          <span className={`stat-value ${simulationState === 'running' ? 'danger' : simulationState === 'contained' ? 'warning' : 'safe'}`}>
+            {simulationState === 'running' ? '14%' : simulationState === 'contained' ? '98%' : '100%'}
+          </span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Containment Actions</span>
+          <span className="stat-value">{simulationState === 'idle' ? '0 Filters' : '3 Filters Active'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Transit Latency</span>
+          <span className="stat-value">{simulationState === 'running' ? '45 ms' : '12 ms'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Tunnel Status</span>
+          <span className="stat-value safe">IPsec UP</span>
+        </div>
+      </div>
+
+      {/* Main visual panel layout */}
+      <div className="dashboard-grid">
+        
+        {/* Left side network layout diagram */}
+        <section className="panel">
+          <div className="panel-header">
+            <div className="panel-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                <line x1="6" y1="6" x2="6.01" y2="6"/>
+                <line x1="6" y1="18" x2="6.01" y2="18"/>
+              </svg>
+              Interactive Network Topology (Cisco Packet Tracer Layout)
+            </div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Click nodes to view details
+            </span>
+          </div>
+
+          <div className="network-canvas-container">
+            <svg className="network-svg" viewBox="0 0 800 450">
+              <defs>
+                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255, 255, 255, 0.02)" strokeWidth="1"/>
+                </pattern>
+                
+                {/* Glow Filter */}
+                <filter id="blue-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="4" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
+
+              {/* cables / connection links */}
+              {/* Internet to Hub */}
+              <line x1="75" y1="225" x2="300" y2="225" stroke="var(--cisco-blue)" strokeWidth="2" strokeOpacity="0.2" />
+              
+              {/* Hub to Spokes */}
+              <line x1="300" y1="225" x2="575" y2="105" stroke="var(--cisco-blue)" strokeWidth="2" strokeOpacity="0.2" />
+              <line x1="300" y1="225" x2="575" y2="225" stroke="var(--cisco-blue)" strokeWidth="2" strokeOpacity="0.2" />
+              <line x1="300" y1="225" x2="575" y2="345" stroke="var(--cisco-blue)" strokeWidth="2" strokeOpacity="0.2" />
+
+              {/* Hub to VPN Gateway */}
+              <line x1="300" y1="225" x2="225" y2="345" stroke="var(--cisco-blue)" strokeWidth="2" strokeOpacity="0.2" />
+              
+              {/* VPN Gateway to On-Prem */}
+              <line x1="225" y1="345" x2="75" y2="345" stroke="var(--accent-cyan)" strokeWidth="2" strokeOpacity="0.2" />
+
+              {/* SVG Motion Path Packet flows */}
+              {simulationState === 'idle' && (
+                <>
+                  {/* Internet to Hub */}
+                  <circle r="4" fill="var(--success)" className="packet-dot">
+                    <animateMotion dur="4s" repeatCount="indefinite" path="M 75 225 L 300 225" />
+                  </circle>
+                  {/* Hub to Student */}
+                  <circle r="4" fill="var(--success)" className="packet-dot">
+                    <animateMotion dur="3s" repeatCount="indefinite" path="M 300 225 L 575 105" />
+                  </circle>
+                  {/* Hub to VPN */}
+                  <circle r="3.5" fill="var(--accent-cyan)" className="packet-dot">
+                    <animateMotion dur="3.5s" repeatCount="indefinite" path="M 300 225 L 225 345" />
+                  </circle>
+                  {/* VPN to On-Prem */}
+                  <circle r="3.5" fill="var(--accent-cyan)" className="packet-dot">
+                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 225 345 L 75 345" />
+                  </circle>
+                </>
+              )}
+
+              {/* Attack packet flows */}
+              {simulationState === 'running' && (
+                <>
+                  {/* Attacker into Hub */}
+                  <circle r="5" fill="var(--danger)" className="packet-dot threat">
+                    <animateMotion dur="2s" repeatCount="indefinite" path="M 75 225 L 300 225" />
+                  </circle>
+                  {/* Attack into Research Spoke */}
+                  <circle r="5" fill="var(--danger)" className="packet-dot threat">
+                    <animateMotion dur="1.5s" repeatCount="indefinite" path="M 300 225 L 575 345" />
+                  </circle>
+                  {/* Lateral movement packet blocked half-way to Student */}
+                  <circle r="4" fill="var(--danger)" className="packet-dot threat">
+                    <animateMotion dur="1.2s" repeatCount="indefinite" path="M 575 345 L 437.5 285" />
+                  </circle>
+                  {/* Lateral movement packet blocked half-way to Faculty */}
+                  <circle r="4" fill="var(--danger)" className="packet-dot threat">
+                    <animateMotion dur="1.2s" repeatCount="indefinite" path="M 575 345 L 437.5 345" />
+                  </circle>
+                </>
+              )}
+
+              {/* Blocked overlays during attack simulation */}
+              {simulationState === 'running' && (
+                <>
+                  {/* block between Hub and Student */}
+                  <circle cx="437.5" cy="285" r="8" fill="var(--danger)" />
+                  {/* block between Hub and Faculty/Exam */}
+                  <circle cx="437.5" cy="345" r="8" fill="var(--danger)" />
+                </>
+              )}
+
+              {/* Contained shield overlay */}
+              {simulationState === 'contained' && (
+                <circle cx="655" cy="345" r="38" fill="none" stroke="var(--success)" strokeWidth="2.5" className="shield-ring" />
+              )}
+
+              {/* Network nodes */}
+              {/* 1. Internet / Attacker */}
+              <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'internet') || null)}>
+                <circle cx="75" cy="225" r="28" fill="#1e293b" stroke="var(--text-secondary)" strokeWidth="2.5" />
+                <text x="75" y="270" textAnchor="middle">External Web User</text>
+                <path d="M67 220 A10 10 0 0 1 83 220" fill="none" stroke="#fff" strokeWidth="2"/>
+                <circle cx="75" cy="225" r="8" fill="none" stroke="#fff" strokeWidth="2"/>
+              </g>
+
+              {/* 2. On-Prem Data Center */}
+              <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'onprem') || null)}>
+                <rect x="35" y="315" width="80" height="60" rx="6" fill="#14213d" stroke="var(--accent-cyan)" strokeWidth="2.5" />
+                <text x="75" y="395" textAnchor="middle">Private DC (On-Prem)</text>
+                <line x1="50" y1="333" x2="100" y2="333" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+                <line x1="50" y1="345" x2="100" y2="345" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+                <line x1="50" y1="357" x2="100" y2="357" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+                <circle cx="45" cy="333" r="2" fill="var(--success)"/>
+                <circle cx="45" cy="345" r="2" fill="var(--success)"/>
+                <circle cx="45" cy="357" r="2" fill="var(--success)"/>
+              </g>
+
+              {/* 3. VPN Security Gateway */}
+              <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'vpn') || null)}>
+                <circle cx="225" cy="345" r="25" fill="#0d1527" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <text x="225" y="388" textAnchor="middle">Cisco ASA Gateway</text>
+                <path d="M218 341 L232 341 M215 345 L235 345 M218 349 L232 349" stroke="#fff" strokeWidth="2" />
+              </g>
+
+              {/* 4. Transit Hub VPC */}
+              <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'hub') || null)}>
+                <circle cx="300" cy="225" r="38" fill="#14213d" stroke="var(--cisco-blue)" strokeWidth="3" filter="url(#blue-glow)" className="network-node-indicator" />
+                <text x="300" y="280" textAnchor="middle">Transit Hub VPC</text>
+                <path d="M292 215 L300 210 L308 215 L308 226 C308 234 300 239 300 239 C300 239 292 234 292 226 Z" fill="none" stroke="#fff" strokeWidth="2"/>
+              </g>
+
+              {/* 5. Spoke: Student */}
+              <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-student') || null)}>
+                <rect x="575" y="75" width="160" height="60" rx="8" fill="#0d1527" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <text x="655" y="110" textAnchor="middle" fill="#fff" style={{ fontSize: '12px', fontWeight: 'bold' }}>Student Spoke VPC</text>
+                <text x="655" y="125" textAnchor="middle" style={{ fontSize: '10px' }}>10.1.0.0/16</text>
+              </g>
+
+              {/* 6. Spoke: Faculty / Exam */}
+              <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-faculty') || null)}>
+                <rect x="575" y="195" width="160" height="60" rx="8" fill="#0d1527" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <text x="655" y="230" textAnchor="middle" fill="#fff" style={{ fontSize: '12px', fontWeight: 'bold' }}>Faculty/Exam Spoke</text>
+                <text x="655" y="245" textAnchor="middle" style={{ fontSize: '10px' }}>10.2.0.0/16</text>
+              </g>
+
+              {/* 7. Spoke: Research (Vulnerable in simulation) */}
+              <g 
+                className="network-node" 
+                onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-research') || null)}
+              >
+                <rect 
+                  x="575" 
+                  y="315" 
+                  width="160" 
+                  height="60" 
+                  rx="8" 
+                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'rgba(255, 46, 99, 0.15)' : '#0d1527'} 
+                  stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--cisco-blue)'} 
+                  strokeWidth="2.5" 
+                  className={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'network-node-indicator threat' : ''}
+                />
+                <text x="655" y="350" textAnchor="middle" fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : '#fff'} style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                  {nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? '⚠️ Research Spoke' : 'Research Spoke VPC'}
+                </text>
+                <text x="655" y="365" textAnchor="middle" style={{ fontSize: '10px' }}>10.3.0.0/16</text>
+              </g>
+            </svg>
+          </div>
+
+          {/* Node Inspector Details */}
+          {selectedNode && (
+            <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <h3 style={{ fontSize: '0.9rem', color: '#fff' }}>{selectedNode.name}</h3>
+                <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{selectedNode.ip}</span>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>{selectedNode.description}</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {selectedNode.details.map((detail, index) => (
+                  <span key={index} style={{ fontSize: '0.7rem', padding: '3px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', color: 'var(--text-muted)' }}>
+                    {detail}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Controls bar */}
+          <div className="controls-bar">
+            <button className="btn btn-danger" onClick={runAttackSimulation} disabled={simulationState === 'running'}>
+              🚀 Run Threat Simulator
+            </button>
+            <button className="btn btn-secondary" onClick={resetSimulation}>
+              🔄 Reset Network
+            </button>
+            <button className="btn btn-secondary" onClick={downloadPktFile} style={{ marginLeft: 'auto' }}>
+              📥 Download .PKT Guide
+            </button>
+          </div>
+        </section>
+
+        {/* Right side logs, configurations & documentation */}
+        <section className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="tab-container">
+            <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>
+              Monitor logs
+            </button>
+            <button className={`tab-btn ${activeTab === 'packet-tracer' ? 'active' : ''}`} onClick={() => setActiveTab('packet-tracer')}>
+              Packet Tracer Config
+            </button>
+            <button className={`tab-btn ${activeTab === 'cisco-mapping' ? 'active' : ''}`} onClick={() => setActiveTab('cisco-mapping')}>
+              Cisco Technology Mappings
+            </button>
+          </div>
+
+          <div style={{ flex: 1 }}>
+            {activeTab === 'logs' && (
+              <div className="terminal-window">
+                <div className="terminal-header">
+                  <div className="terminal-buttons">
+                    <span className="term-dot term-close"></span>
+                    <span className="term-dot term-min"></span>
+                    <span className="term-dot term-max"></span>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>audit_log_stream.sh</span>
+                </div>
+                <div className="terminal-body">
+                  {logs.map((log, index) => (
+                    <div key={index} className="terminal-line">
+                      <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>[{log.timestamp}]</span>
+                      <span style={{ 
+                        color: log.type === 'danger' ? 'var(--danger)' : 
+                               log.type === 'warning' ? 'var(--warning)' : 
+                               log.type === 'success' ? 'var(--success)' : 
+                               log.type === 'cisco' ? 'var(--cisco-blue)' : '#cbd5e1',
+                        fontWeight: log.type === 'danger' || log.type === 'warning' ? 'bold' : 'normal'
+                      }}>
+                        {log.source}: {log.message}
+                      </span>
+                    </div>
+                  ))}
+                  {simulationState === 'running' && (
+                    <div className="terminal-input-line">
+                      <span style={{ color: 'var(--danger)' }}>$ infiltrating...</span>
+                      <span className="terminal-cursor"></span>
+                    </div>
+                  )}
+                  <div ref={consoleEndRef} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'packet-tracer' && (
+              <div className="pkt-info-grid">
+                <div className="pkt-card">
+                  <h4>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                    1. ASA Configuration
+                  </h4>
+                  <p>In Packet Tracer, load the <strong>cisco-asa.cfg</strong> commands on the ASA 5506-X CLI to partition the outside spoke interfaces.</p>
+                  <ul>
+                    <li>Apply Access-Lists on gig1/1.</li>
+                    <li>Restricts research subnets from lateral pings.</li>
+                  </ul>
+                </div>
+                <div className="pkt-card">
+                  <h4>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    2. ping verification
+                  </h4>
+                  <p>Check the isolation limits in the CLI panel of the respective client terminal:</p>
+                  <ul>
+                    <li><strong>Student app {"->"} Student DB</strong>: success</li>
+                    <li><strong>Research app {"->"} Student app</strong>: blocked</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'cisco-mapping' && (
+              <div className="cisco-mapping-card">
+                <div className="mapping-row">
+                  <div className="mapping-product">Cisco Secure Firewall</div>
+                  <div className="mapping-native">Security Groups / Route Tables</div>
+                  <div className="mapping-desc">Blocks traffic between spokes and enforces transit inspection.</div>
+                </div>
+                <div className="mapping-row">
+                  <div className="mapping-product">Cisco ISE</div>
+                  <div className="mapping-native">Kubernetes NetworkPolicies</div>
+                  <div className="mapping-desc">Restricts pod communications based on cryptographically-secure namespace labels.</div>
+                </div>
+                <div className="mapping-row">
+                  <div className="mapping-product">Cisco ASA (VPN Gateway)</div>
+                  <div className="mapping-native">Virtual Private Gateway</div>
+                  <div className="mapping-desc">Maintains secure IPsec tunnel links for database nodes.</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* Code Repository and Policy Explorer */}
+      <section className="panel" style={{ marginTop: '1.5rem' }}>
+        <div className="panel-header">
+          <div className="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            Zero-Trust Infrastructure Code Explorer (IaC & Policy Repository)
+          </div>
+          <div className="tab-container" style={{ margin: 0, padding: '3px' }}>
+            <button className={`tab-btn ${activeBottomTab === 'iac' ? 'active' : ''}`} onClick={() => setActiveBottomTab('iac')}>
+              Terraform & ASA IaC
+            </button>
+            <button className={`tab-btn ${activeBottomTab === 'sg-rules' ? 'active' : ''}`} onClick={() => setActiveBottomTab('sg-rules')}>
+              Security Matrices
+            </button>
+          </div>
+        </div>
+
+        {activeBottomTab === 'iac' && (
+          <div className="repo-explorer">
+            <div className="repo-sidebar">
+              <div className={`repo-item ${selectedFile === 'terraform' ? 'active' : ''}`} onClick={() => setSelectedFile('terraform')}>
+                📁 terraform/network.tf
+              </div>
+              <div className={`repo-item ${selectedFile === 'k8s' ? 'active' : ''}`} onClick={() => setSelectedFile('k8s')}>
+                📁 k8s/network-policy.yaml
+              </div>
+              <div className={`repo-item ${selectedFile === 'iam' ? 'active' : ''}`} onClick={() => setSelectedFile('iam')}>
+                📁 iam/workload-identity.json
+              </div>
+              <div className={`repo-item ${selectedFile === 'ciscoConfig' ? 'active' : ''}`} onClick={() => setSelectedFile('ciscoConfig')}>
+                📁 cisco/cisco-asa.cfg
+              </div>
+            </div>
+            
+            <div className="repo-content">
+              <div className="repo-content-header">
+                <span className="repo-filename">{selectedFile === 'terraform' ? 'terraform/network.tf' : selectedFile === 'k8s' ? 'k8s/network-policy.yaml' : selectedFile === 'iam' ? 'iam/workload-identity.json' : 'cisco/cisco-asa.cfg'}</span>
+                <button className="btn btn-secondary" onClick={copyToClipboard} style={{ padding: '4px 10px', fontSize: '0.65rem' }}>
+                  {copiedStatus ? 'Copied!' : 'Copy Code'}
+                </button>
+              </div>
+              <div className="repo-code-container">
+                {renderHighlightedCode(mockCodeFiles[selectedFile])}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeBottomTab === 'sg-rules' && (
+          <div className="policy-table-container">
+            <table className="policy-table">
+              <thead>
+                <tr>
+                  <th>Rule ID</th>
+                  <th>Source Spoke / IP</th>
+                  <th>Destination Spoke / IP</th>
+                  <th>Allowed Protocol/Port</th>
+                  <th>Default Action</th>
+                  <th>Security Enforcer</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>SG-01</td>
+                  <td>Student App (10.1.1.0/24)</td>
+                  <td>Student DB (10.1.2.10)</td>
+                  <td>TCP / 5432</td>
+                  <td style={{ color: 'var(--success)' }}>ALLOW</td>
+                  <td>AWS Security Group / K8s policy</td>
+                </tr>
+                <tr>
+                  <td>SG-02</td>
+                  <td>Research App (10.3.1.0/24)</td>
+                  <td>Student Spoke (10.1.0.0/16)</td>
+                  <td>Any</td>
+                  <td style={{ color: 'var(--danger)' }}>DENY</td>
+                  <td>Cisco Secure Firewall Virtual</td>
+                </tr>
+                <tr>
+                  <td>SG-03</td>
+                  <td>Faculty App (10.2.1.0/24)</td>
+                  <td>Exam DB (10.2.2.10)</td>
+                  <td>TCP / 3306</td>
+                  <td style={{ color: 'var(--success)' }}>ALLOW</td>
+                  <td>K8s NetworkPolicy</td>
+                </tr>
+                <tr>
+                  <td>SG-04</td>
+                  <td>Research Spoke (10.3.0.0/16)</td>
+                  <td>Private DC (10.10.0.0/16)</td>
+                  <td>Any</td>
+                  <td style={{ color: 'var(--danger)' }}>DENY</td>
+                  <td>Cisco ASA VPN Gateway</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Premium Multi-column Footer */}
+      <footer className="footer-container">
+        <div className="footer-grid">
+          <div className="footer-col brand">
+            <div className="footer-logo">Cisco Zero-Trust Portal</div>
+            <p>
+              Designing and enforcing default-deny routing rules, Kubernetes container micro-segmentation, and secure Cisco ASA IPsec gateway connections.
+            </p>
+          </div>
+          <div className="footer-col links">
+            <h4>Quick Anchors</h4>
+            <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('iac'); }}>IaC Explorer</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('sg-rules'); }}>Access Policies</a>
+            <a href="#" onClick={downloadPktFile}>Packet Tracer (.pkt)</a>
+          </div>
+          <div className="footer-col info">
+            <h4>Intern Credentials</h4>
+            <p><strong>Candidate ID:</strong> Cisco-VI-2026-9281</p>
+            <p><strong>Focus Area:</strong> Cloud Security & DevSecOps</p>
+            <p><strong>System Link:</strong> <span className="status-indicator-green">Tunnel Secured</span></p>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <p>© 2026 Cisco Virtual Internship. Verified against Phase 8 project rules.</p>
+          <a href="#" onClick={(e) => { e.preventDefault(); resetSimulation(); }}>Restore Security Matrix</a>
+        </div>
+      </footer>
     </div>
   );
 }

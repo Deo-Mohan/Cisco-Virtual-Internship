@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cisco Cyber Track 2026: Hybrid Data Center Zero-Trust Portal
 
-## Getting Started
+This repository contains the production-ready simulation portal and infrastructure-as-code (IaC) templates for the **Cisco Cyber Track Virtual Internship**. The project demonstrates a Zero-Trust Hybrid Data Center architecture designed to enforce micro-segmentation, eliminate transitive routing risks, and secure data tunnels between cloud resources and on-premises environments.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🏗️ Architecture Overview
+
+The system models a secure **Hub-and-Spoke** network layout to partition student services, faculty resources, and research environments:
+
+```mermaid
+graph TD
+    subgraph Public Internet
+        User[External Client / Attacker]
+    end
+
+    subgraph AWS Transit Hub VPC [10.0.0.0/16]
+        Hub[Transit Gateway / Inspection Engine]
+    end
+
+    subgraph Private Spoke VPCs
+        Spoke1[Student Spoke - 10.1.0.0/16]
+        Spoke2[Faculty & Exam Spoke - 10.2.0.0/16]
+        Spoke3[Research Spoke - 10.3.0.0/16]
+    end
+
+    subgraph On-Premises
+        ASA[Cisco ASA VPN Gateway]
+        DC[Private Data Center - 10.10.0.0/16]
+    end
+
+    User -->|HTTPS Port 443| Hub
+    Hub <--> Spoke1
+    Hub <--> Spoke2
+    Hub <--> Spoke3
+    Hub <-->|IPsec VPN Tunnel| ASA
+    ASA <--> DC
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Key Security Guardrails Implemented
+1. **No Transitive Spoke Peering**: Spokes peer directly with the central **Transit Hub VPC**. Spoke-to-Spoke routing is strictly disabled at the route table level.
+2. **Kubernetes Namespace Separation**: Pod communications are locked down using `default-deny-all` `NetworkPolicies`. Outbound container flows are restricted to the local database and verified DNS endpoints only.
+3. **Cisco ASA IPsec VPN**: Secure cross-site connections utilize IKEv2 policies configured with AES-256 encryption and SHA-256 hashing.
+4. **Least-Privilege Workload Access**: Workloads utilize IAM Workload Identity bindings to read/write only from designated resources, completely blocking wildcard administrative actions.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ⚡ Threat Simulation Harness (PRD Section 14)
 
-## Learn More
+The built-in web simulator allows you to execute a threat validation scenario modeled after a compromised container instance inside the **Research Spoke VPC (10.3.0.0/16)**:
 
-To learn more about Next.js, take a look at the following resources:
+- **Lateral Threat Vector**: A compromised SSH key triggers scan requests aimed at the Student and Faculty networks.
+- **Firewall Blocking**: Cisco Secure Firewall rules drop packet flows transitioning between spoke boundaries.
+- **Micro-segmentation Containment**: Container egress validation blocks traffic seeking access to foreign namespaces.
+- **Verification Result**: The blast radius is confined to 0% lateral exposure, validating the security architecture.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## ⚙️ Cisco Packet Tracer Validation
 
-## Deploy on Vercel
+To configure and verify this layout in **Cisco Packet Tracer**:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Download Configuration**: Generate and download the `cisco_hybrid_datacenter.pkt` template directly from the portal's action bar.
+2. **Apply ASA ACL Config**:
+   * Open the CLI console of the Cisco ASA 5506-X Security Gateway.
+   * Apply the access control list commands found in the portal's code repository window (`cisco/cisco-asa.cfg`).
+3. **Run Validation Commands**:
+   * **Ping Success**: Run `ping 10.1.2.10` from the Student App terminal to verify local database connectivity.
+   * **Ping Failures**: Attempt to ping across the firewall boundaries (e.g., from Research App host 10.3.1.15 to Student host 10.1.1.5). The ping packets will be dropped by the ASA ACLs.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🚀 Setup & Launch Instructions
+
+### Prerequisites
+* Node.js v18 or later
+* npm / yarn
+
+### Development Server
+Install dependencies and run the server locally:
+
+```bash
+# Install packages
+npm install
+
+# Start Next.js development server
+npm run dev
+```
+
+Open [http://localhost:3001](http://localhost:3001) in your browser to preview the live interactive dashboard.
+
+### Build Production Bundle
+To compile and type-check the application:
+
+```bash
+npm run build
+```
