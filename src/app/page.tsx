@@ -415,6 +415,7 @@ export default function Home() {
   const [activeBottomTab, setActiveBottomTab] = useState<'iac' | 'sg-rules' | 'k8s-policies'>('iac');
   const [selectedFile, setSelectedFile] = useState<'terraform' | 'k8s' | 'iam' | 'ciscoConfig'>('terraform');
   const [copiedStatus, setCopiedStatus] = useState<boolean>(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
   const [policyMode, setPolicyMode] = useState<'strict' | 'permissive'>('strict');
   const [activeRuleTarget, setActiveRuleTarget] = useState<'deny-research' | 'allow-db'>('deny-research');
@@ -429,6 +430,11 @@ export default function Home() {
   ]);
   
   const consoleEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync theme attribute on <html> element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   // Dynamic code files configuration
   const mockCodeFiles = {
@@ -630,7 +636,11 @@ Configuration:
       {/* Header metrics bar */}
       <header>
         <div className="logo-section">
-          <div className="logo-icon">C</div>
+          <img 
+            src="/cisco-logo.png" 
+            alt="Cisco Zero-Trust Logo" 
+            style={{ width: '42px', height: '42px', borderRadius: '10px', objectFit: 'cover', boxShadow: 'var(--shadow-glow)' }} 
+          />
           <div className="logo-text">
             <h1>Cisco Hybrid Data Center Simulator</h1>
             <p>Zero-Trust Reference Architecture & Simulation Hub</p>
@@ -638,6 +648,14 @@ Configuration:
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+            style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px' }}
+          >
+            {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
+          
           {simulationState === 'idle' && (
             <div className="badge badge-success">
               <span className="live-dot"></span> SECURE (Normal Traffic)
@@ -1384,7 +1402,7 @@ Configuration:
         <div className="footer-grid">
           <div className="footer-col brand">
             <div className="footer-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, var(--cisco-blue), var(--accent-cyan))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', color: '#fff', flexShrink: 0 }}>C</div>
+              <img src="/cisco-logo.png" alt="Cisco Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
               Cisco Zero-Trust Portal
             </div>
             <p>
