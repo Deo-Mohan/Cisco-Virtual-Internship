@@ -465,9 +465,19 @@ export default function Home() {
   
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
-  // Sync theme attribute on <html> element
+  // Load saved theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('cisco_zero_trust_theme') as 'dark' | 'light' | null;
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  }, []);
+
+  // Sync theme attribute on <html> element & persist to localStorage
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('cisco_zero_trust_theme', theme);
   }, [theme]);
 
   // Dynamic code files configuration

@@ -6,9 +6,19 @@ import Link from 'next/link';
 export default function GuidePage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // Sync global document theme attribute
+  // Load saved theme from localStorage on mount
+  React.useEffect(() => {
+    const savedTheme = localStorage.getItem('cisco_zero_trust_theme') as 'dark' | 'light' | null;
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+  }, []);
+
+  // Sync global document theme attribute & persist to localStorage
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('cisco_zero_trust_theme', theme);
   }, [theme]);
 
   return (
