@@ -36,24 +36,24 @@
 
 /* Light Theme Variables */
 [data-theme='light'] {
-  --bg-primary: #e2e8f0;
+  --bg-primary: #cbd5e1;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #cbd5e1;
+  --bg-tertiary: #94a3b8;
   --bg-glass: rgba(255, 255, 255, 0.95);
   --bg-glass-hover: rgba(241, 245, 249, 1);
-  --border-color: rgba(15, 23, 42, 0.15);
-  --border-highlight: rgba(0, 180, 216, 0.55);
+  --border-color: rgba(15, 23, 42, 0.2);
+  --border-highlight: rgba(0, 180, 216, 0.65);
   
-  --cisco-blue: hsl(196, 100%, 32%);
-  --cisco-blue-glow: hsla(196, 100%, 32%, 0.15);
-  --accent-cyan: hsl(180, 100%, 28%);
-  --success: hsl(142, 72%, 28%);
-  --danger: hsl(354, 85%, 40%);
-  --warning: hsl(38, 92%, 35%);
+  --cisco-blue: hsl(196, 100%, 28%);
+  --cisco-blue-glow: hsla(196, 100%, 28%, 0.15);
+  --accent-cyan: hsl(180, 100%, 25%);
+  --success: hsl(142, 72%, 25%);
+  --danger: hsl(354, 85%, 38%);
+  --warning: hsl(38, 92%, 30%);
   
-  --text-primary: #020617;
+  --text-primary: #0f172a;
   --text-secondary: #1e293b;
-  --text-muted: #475569;
+  --text-muted: #334155;
   
   --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 12px 40px 0 rgba(0, 0, 0, 0.08);
@@ -106,7 +106,16 @@
 
 [data-theme='light'] .pkt-card p,
 [data-theme='light'] .pkt-card ul li {
+  color: #1e293b !important;
+}
+
+[data-theme='light'] .network-node text {
+  fill: #0f172a !important;
+}
+
+[data-theme='light'] .stat-label {
   color: #334155 !important;
+  font-weight: 700;
 }
 
 * {
