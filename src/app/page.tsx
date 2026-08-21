@@ -569,13 +569,13 @@ Configuration:
               <path d="M 103 225 L 262 225" stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)'} strokeWidth="2.5" className="flowing-path" strokeOpacity="0.8" />
               
               {/* Path 2: Hub to Student */}
-              <path d="M 338 225 L 575 105" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
+              <path d="M 338 225 L 570 105" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
               
               {/* Path 3: Hub to Faculty */}
-              <path d="M 338 225 L 575 225" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
+              <path d="M 338 225 L 570 225" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
               
               {/* Path 4: Hub to Research */}
-              <path d="M 338 225 L 575 345" stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--cisco-blue)'} strokeWidth="2" className="flowing-path" strokeOpacity={simulationState === 'contained' ? 0.25 : 0.8} fill="none" />
+              <path d="M 338 225 L 570 345" stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--cisco-blue)'} strokeWidth="2" className="flowing-path" strokeOpacity={simulationState === 'contained' ? 0.25 : 0.8} fill="none" />
 
               {/* Path 5: Hub to VPN Gateway */}
               <path d="M 300 263 L 225 320" stroke="var(--cisco-blue)" strokeWidth="2" className="flowing-path" strokeOpacity="0.8" fill="none" />
@@ -590,7 +590,7 @@ Configuration:
                     <animateMotion dur="3.5s" repeatCount="indefinite" path="M 103 225 L 262 225" />
                   </circle>
                   <circle r="4" fill="var(--success)">
-                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 338 225 L 575 105" />
+                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 338 225 L 570 105" />
                   </circle>
                   <circle r="4.5" fill="var(--accent-cyan)">
                     <animateMotion dur="3s" repeatCount="indefinite" path="M 300 263 L 225 320" />
@@ -608,11 +608,11 @@ Configuration:
                     <animateMotion dur="1.8s" repeatCount="indefinite" path="M 103 225 L 262 225" />
                   </circle>
                   <circle r="5" fill="var(--danger)" filter="url(#threat-glow)">
-                    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 338 225 L 575 345" />
+                    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 338 225 L 570 345" />
                   </circle>
                   {/* Blocked attempts bouncing from Research spoke */}
                   <circle r="4" fill="var(--danger)">
-                    <animateMotion dur="1s" repeatCount="indefinite" path="M 575 345 L 437.5 285" />
+                    <animateMotion dur="1s" repeatCount="indefinite" path="M 570 345 L 437.5 285" />
                   </circle>
                 </>
               )}
@@ -630,8 +630,8 @@ Configuration:
               {/* Contained shield overlay on Research Spoke */}
               {simulationState === 'contained' && (
                 <g>
-                  <circle cx="655" cy="345" r="42" fill="none" stroke="var(--success)" strokeWidth="2.5" className="shield-ring" />
-                  <circle cx="655" cy="345" r="54" fill="none" stroke="var(--success)" strokeWidth="1.5" className="shield-ring" style={{ animationDelay: '0.6s' }} />
+                  <circle cx="660" cy="345" r="42" fill="none" stroke="var(--success)" strokeWidth="2.5" className="shield-ring" />
+                  <circle cx="660" cy="345" r="54" fill="none" stroke="var(--success)" strokeWidth="1.5" className="shield-ring" style={{ animationDelay: '0.6s' }} />
                 </g>
               )}
 
@@ -681,30 +681,30 @@ Configuration:
 
               {/* 5. Student Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-student') || null)}>
-                <rect x="575" y="75" width="160" height="60" rx="8" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <rect x="575" y="75" width="170" height="60" rx="8" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
                 {/* Cap icon */}
                 <path d="M 590 102 L 602 96 L 614 102 L 602 108 Z" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
                 <path d="M 596 105 V 110 A 5 5 0 0 0 608 110 V 105" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
                 <line x1="614" y1="102" x2="614" y2="114" stroke="var(--accent-cyan)" strokeWidth="1" />
                 
-                <text x="662" y="105" textAnchor="start" fill="#fff" style={{ fontSize: '12px', fontWeight: 'bold' }}>Student Spoke</text>
-                <text x="662" y="120" textAnchor="start" style={{ fontSize: '10px' }}>10.1.0.0/16</text>
+                <text x="630" y="105" textAnchor="start" fill="#fff" style={{ fontSize: '11px', fontWeight: 'bold' }}>Student Spoke</text>
+                <text x="630" y="120" textAnchor="start" style={{ fontSize: '10px' }}>10.1.0.0/16</text>
               </g>
 
               {/* 6. Faculty Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-faculty') || null)}>
-                <rect x="575" y="195" width="160" height="60" rx="8" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <rect x="575" y="195" width="170" height="60" rx="8" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
                 {/* Padlock icon */}
                 <rect x="594" y="222" width="14" height="11" rx="1.5" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
                 <path d="M 597 222 V 218 A 3.5 3.5 0 0 1 604 218 V 222" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
                 
-                <text x="662" y="225" textAnchor="start" fill="#fff" style={{ fontSize: '12px', fontWeight: 'bold' }}>Faculty/Exam</text>
-                <text x="662" y="240" textAnchor="start" style={{ fontSize: '10px' }}>10.2.0.0/16</text>
+                <text x="630" y="225" textAnchor="start" fill="#fff" style={{ fontSize: '11px', fontWeight: 'bold' }}>Faculty/Exam</text>
+                <text x="630" y="240" textAnchor="start" style={{ fontSize: '10px' }}>10.2.0.0/16</text>
               </g>
 
               {/* 7. Research Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-research') || null)}>
-                <rect x="575" y="315" width="160" height="60" rx="8" 
+                <rect x="575" y="315" width="170" height="60" rx="8" 
                   fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'rgba(239, 68, 68, 0.08)' : '#080e1a'} 
                   stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--cisco-blue)'} 
                   strokeWidth="2" 
@@ -712,10 +712,10 @@ Configuration:
                 {/* Flask icon */}
                 <path d="M 598 335 H 608 M 603 335 V 341 L 594 355 A 2.5 2.5 0 0 0 596 359 H 610 A 2.5 2.5 0 0 0 612 355 L 603 341" fill="none" stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--accent-cyan)'} strokeWidth="1.5" />
                 
-                <text x="662" y="345" textAnchor="start" fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : '#fff'} style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                <text x="630" y="345" textAnchor="start" fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : '#fff'} style={{ fontSize: '11px', fontWeight: 'bold' }}>
                   {nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? '⚠️ Research Spoke' : 'Research Spoke'}
                 </text>
-                <text x="662" y="360" textAnchor="start" style={{ fontSize: '10px' }}>10.3.0.0/16</text>
+                <text x="630" y="360" textAnchor="start" style={{ fontSize: '10px' }}>10.3.0.0/16</text>
               </g>
             </svg>
           </div>
