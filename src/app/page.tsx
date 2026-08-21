@@ -2,6 +2,39 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
+// Smooth counting up/down animated number component
+const AnimatedNumber = ({ value, duration = 800, suffix = '', decimals = 0 }: { value: number; duration?: number; suffix?: string; decimals?: number }) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  const startValueRef = useRef(value);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    startValueRef.current = displayValue;
+    startTimeRef.current = null;
+
+    let animationFrameId: number;
+
+    const animate = (timestamp: number) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
+      const easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+
+      const currentValue = startValueRef.current + (value - startValueRef.current) * easeProgress;
+      setDisplayValue(currentValue);
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [value, duration]);
+
+  return <span>{displayValue.toFixed(decimals)}{suffix}</span>;
+};
+
 // node structure for the topology map
 interface NetworkNode {
   id: string;
@@ -679,16 +712,20 @@ Configuration:
         <div className="stat-card">
           <span className="stat-label">System Integrity</span>
           <span className={`stat-value ${simulationState === 'running' ? 'danger' : simulationState === 'contained' ? 'warning' : 'safe'}`}>
-            {simulationState === 'running' ? '14%' : simulationState === 'contained' ? '98%' : '100%'}
+            <AnimatedNumber value={simulationState === 'running' ? 14 : simulationState === 'contained' ? 98 : 100} suffix="%" />
           </span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Containment Actions</span>
-          <span className="stat-value">{simulationState === 'idle' ? '0 Filters' : '3 Filters Active'}</span>
+          <span className="stat-value">
+            <AnimatedNumber value={simulationState === 'idle' ? 0 : 3} suffix={simulationState === 'idle' ? ' Filters' : ' Filters Active'} />
+          </span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Transit Latency</span>
-          <span className="stat-value">{simulationState === 'running' ? '45 ms' : '12 ms'}</span>
+          <span className="stat-value">
+            <AnimatedNumber value={simulationState === 'running' ? 45 : 12} suffix=" ms" />
+          </span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Tunnel Status</span>
@@ -1070,19 +1107,19 @@ Configuration:
                 <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)' }}>
                   <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>Inspected Traffic</div>
                   <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
-                    {metricsHistory[metricsHistory.length - 1]} p/s
+                    <AnimatedNumber value={metricsHistory[metricsHistory.length - 1] || 0} suffix=" p/s" />
                   </div>
                 </div>
                 <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)' }}>
                   <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>Blocked Threats</div>
                   <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: simulationState !== 'idle' ? 'var(--danger)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    {simulationState === 'idle' ? '0' : simulationState === 'running' ? '28' : '42'}
+                    <AnimatedNumber value={simulationState === 'idle' ? 0 : simulationState === 'running' ? 28 : 42} />
                   </div>
                 </div>
                 <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)' }}>
                   <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>CPU Load</div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#fff', fontFamily: 'var(--font-mono)' }}>
-                    {simulationState === 'idle' ? '4.8%' : simulationState === 'running' ? '82.4%' : '12.1%'}
+                  <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: simulationState === 'running' ? 'var(--danger)' : 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                    <AnimatedNumber value={simulationState === 'idle' ? 4.8 : simulationState === 'running' ? 82.4 : 12.1} decimals={1} suffix="%" />
                   </div>
                 </div>
               </div>
