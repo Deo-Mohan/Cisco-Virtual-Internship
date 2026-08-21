@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 
 // Smooth counting up/down animated number component
 const AnimatedNumber = ({ value, duration = 800, suffix = '', decimals = 0 }: { value: number; duration?: number; suffix?: string; decimals?: number }) => {
@@ -681,6 +682,14 @@ Configuration:
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <Link 
+            href="/guide" 
+            className="btn btn-secondary" 
+            style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px', textDecoration: 'none', background: 'rgba(0, 180, 216, 0.1)', color: 'var(--cisco-blue)', borderColor: 'rgba(0, 180, 216, 0.3)' }}
+          >
+            📘 Usage Guide
+          </Link>
+
           <button 
             className="btn btn-secondary" 
             onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
@@ -1037,7 +1046,7 @@ Configuration:
                   className={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'network-node-indicator threat' : ''} />
                 {/* Status indicator LED in Research spoke */}
                 <circle cx="778" cy="352" r="3" 
-                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : nodes.find(n => n.id === 'spoke-research')?.status === 'contained' ? 'var(--warning)' : 'var(--success)'} 
+                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : simulationState === 'contained' ? 'var(--warning)' : 'var(--success)'} 
                   className="live-ticking-dot" />
                 {/* Flask icon */}
                 <path d="M 663 360 H 673 M 668 360 V 366 L 659 380 A 2.5 2.5 0 0 0 661 384 H 675 A 2.5 2.5 0 0 0 677 380 L 668 366" fill="none" stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--accent-cyan)'} strokeWidth="1.5" />
@@ -1456,6 +1465,7 @@ Configuration:
           </div>
           <div className="footer-col links">
             <h4>Quick Anchors</h4>
+            <Link href="/guide">📘 Usage Guide</Link>
             <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('iac'); }}>📂 IaC Explorer</a>
             <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('sg-rules'); }}>🔒 Access Policies</a>
             <a href="#" onClick={downloadPktFile}>📥 Packet Tracer (.pkt)</a>
