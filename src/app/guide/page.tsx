@@ -69,7 +69,27 @@ export default function GuidePage() {
           </Link>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <a 
+            href="https://github.com/Deo-Mohan/Cisco-Virtual-Internship/blob/main/WORKING_GUIDELINE.md" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="btn btn-secondary"
+            style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            📝 View raw WORKING_GUIDELINE.md
+          </a>
+
+          <a 
+            href="https://github.com/Deo-Mohan/Cisco-Virtual-Internship" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="btn btn-secondary"
+            style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.3)' }}
+          >
+            ⭐ Star Repo on GitHub
+          </a>
+
           <button 
             className="btn btn-secondary" 
             onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
@@ -98,9 +118,17 @@ export default function GuidePage() {
         
         {/* Banner Section */}
         <div className="panel" style={{ padding: '2.5rem', border: '1px solid var(--border-highlight)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem', flexWrap: 'wrap' }}>
             <span className="badge badge-primary">OFFICIAL WORKING GUIDELINE</span>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Maintained by Cisco VI Cyber Track Team • Version 2.0</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Maintained by Krishna Mohan- Cyber Track Team • Version 1.0</span>
+            <a 
+              href="https://github.com/Deo-Mohan/Cisco-Virtual-Internship" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ fontSize: '0.8rem', color: '#eab308', textDecoration: 'none', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            >
+              ⭐ Star on GitHub →
+            </a>
           </div>
           <h2 style={{ fontSize: '2rem', marginBottom: '0.85rem', fontWeight: 800 }}>
             📘 Cisco Zero-Trust Hybrid Data Center Simulation
