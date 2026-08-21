@@ -639,7 +639,7 @@ Configuration:
           <img 
             src="/cisco-logo.png" 
             alt="Cisco Zero-Trust Logo" 
-            style={{ width: '42px', height: '42px', borderRadius: '10px', objectFit: 'cover', boxShadow: 'var(--shadow-glow)' }} 
+            style={{ width: '54px', height: '54px', borderRadius: '12px', objectFit: 'cover', boxShadow: 'var(--shadow-glow)' }} 
           />
           <div className="logo-text">
             <h1>Cisco Hybrid Data Center Simulator</h1>
@@ -1401,9 +1401,9 @@ Configuration:
       <footer className="footer-container">
         <div className="footer-grid">
           <div className="footer-col brand">
-            <div className="footer-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <img src="/cisco-logo.png" alt="Cisco Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
-              Cisco Zero-Trust Portal
+            <div className="footer-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <img src="/cisco-logo.png" alt="Cisco Logo" style={{ width: '40px', height: '40px', borderRadius: '10px', objectFit: 'cover' }} />
+              <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>Cisco Zero-Trust Portal</span>
             </div>
             <p>
               Designing and enforcing default-deny routing rules, Kubernetes container micro-segmentation, and secure Cisco ASA IPsec gateway connections.

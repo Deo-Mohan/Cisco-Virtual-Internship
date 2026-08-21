@@ -36,27 +36,77 @@
 
 /* Light Theme Variables */
 [data-theme='light'] {
-  --bg-primary: #f1f5f9;
+  --bg-primary: #e2e8f0;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #e2e8f0;
-  --bg-glass: rgba(255, 255, 255, 0.85);
-  --bg-glass-hover: rgba(248, 250, 252, 0.95);
-  --border-color: rgba(15, 23, 42, 0.12);
-  --border-highlight: rgba(0, 180, 216, 0.45);
+  --bg-tertiary: #cbd5e1;
+  --bg-glass: rgba(255, 255, 255, 0.95);
+  --bg-glass-hover: rgba(241, 245, 249, 1);
+  --border-color: rgba(15, 23, 42, 0.15);
+  --border-highlight: rgba(0, 180, 216, 0.55);
   
-  --cisco-blue: hsl(196, 100%, 38%);
-  --cisco-blue-glow: hsla(196, 100%, 38%, 0.25);
-  --accent-cyan: hsl(180, 100%, 32%);
-  --success: hsl(142, 72%, 35%);
-  --danger: hsl(354, 85%, 45%);
-  --warning: hsl(38, 92%, 40%);
+  --cisco-blue: hsl(196, 100%, 32%);
+  --cisco-blue-glow: hsla(196, 100%, 32%, 0.15);
+  --accent-cyan: hsl(180, 100%, 28%);
+  --success: hsl(142, 72%, 28%);
+  --danger: hsl(354, 85%, 40%);
+  --warning: hsl(38, 92%, 35%);
   
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
+  --text-primary: #020617;
+  --text-secondary: #1e293b;
+  --text-muted: #475569;
   
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 12px 40px 0 rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 12px 40px 0 rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .logo-text h1 {
+  background: linear-gradient(to right, #0f172a, #334155);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-theme='light'] .panel-title {
+  color: #0f172a;
+}
+
+[data-theme='light'] .terminal-window,
+[data-theme='light'] .repo-content,
+[data-theme='light'] .tab-container {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme='light'] .terminal-header,
+[data-theme='light'] .repo-sidebar,
+[data-theme='light'] .repo-content-header {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+[data-theme='light'] .terminal-line {
+  color: #1e293b;
+}
+
+[data-theme='light'] .repo-code-container {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[data-theme='light'] .network-canvas-container {
+  background: radial-gradient(circle at center, #f8fafc 0%, #e2e8f0 100%) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+[data-theme='light'] .pkt-card {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #1e293b !important;
+}
+
+[data-theme='light'] .pkt-card p,
+[data-theme='light'] .pkt-card ul li {
+  color: #334155 !important;
 }
 
 * {
