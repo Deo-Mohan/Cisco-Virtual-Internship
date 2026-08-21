@@ -97,15 +97,15 @@ export default function GuidePage() {
       <div ref={contentRef} style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', padding: '1rem', borderRadius: '12px', background: 'transparent' }}>
         
         {/* Banner Section */}
-        <div className="panel" style={{ padding: '2.5rem', background: 'linear-gradient(135deg, rgba(0, 180, 216, 0.12), rgba(15, 23, 42, 0.75))', border: '1px solid rgba(0, 180, 216, 0.3)' }}>
+        <div className="panel" style={{ padding: '2.5rem', border: '1px solid var(--border-highlight)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
             <span className="badge badge-primary">OFFICIAL WORKING GUIDELINE</span>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Maintained by Cisco VI Cyber Track Team • Version 2.0</span>
           </div>
-          <h2 style={{ fontSize: '2rem', color: 'var(--text-primary)', marginBottom: '0.85rem', fontWeight: 800 }}>
+          <h2 style={{ fontSize: '2rem', marginBottom: '0.85rem', fontWeight: 800 }}>
             📘 Cisco Zero-Trust Hybrid Data Center Simulation
           </h2>
-          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, maxWidth: '900px', fontSize: '0.95rem' }}>
+          <p style={{ lineHeight: 1.8, maxWidth: '900px', fontSize: '0.95rem' }}>
             A comprehensive, step-by-step guide for using this web-based simulation portal alongside <strong>Cisco Packet Tracer</strong> to validate a Zero-Trust network architecture.
           </p>
         </div>
@@ -159,7 +159,7 @@ export default function GuidePage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Execute the following commands to initialize local development server:</p>
-            <pre className="repo-code-container" style={{ padding: '1.25rem', borderRadius: '8px', background: '#090e1a', color: '#38bdf8', fontSize: '0.8rem', lineHeight: 1.6 }}>
+            <pre className="repo-code-container" style={{ padding: '1.25rem', borderRadius: '8px', fontSize: '0.8rem', lineHeight: 1.6 }}>
 {`# Step 1: Clone the Repository
 git clone https://github.com/Deo-Mohan/Cisco-Virtual-Internship.git
 cd Cisco-Virtual-Internship
@@ -286,7 +286,7 @@ npm run dev
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                 Open the CLI tab on the ASA node in Packet Tracer and paste the configuration commands:
               </p>
-              <pre className="repo-code-container" style={{ padding: '1rem', borderRadius: '6px', fontSize: '0.75rem', background: '#090e1a', color: '#38bdf8' }}>
+              <pre className="repo-code-container" style={{ padding: '1rem', borderRadius: '6px', fontSize: '0.75rem' }}>
 {`! Apply ASA Micro-segmentation Access Control Lists
 interface GigabitEthernet1/1
  nameif outside
