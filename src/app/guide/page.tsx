@@ -1,94 +1,15 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function GuidePage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isExporting, setIsExporting] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
 
   // Sync global document theme attribute
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
-
-  const handleDownloadPdf = async () => {
-    setIsExporting(true);
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const jsPDF = (await import('jspdf')).default;
-
-      if (!contentRef.current) return;
-
-      const element = contentRef.current;
-      
-      // Render canvas with clean white background and high-contrast text rendering
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        onclone: (clonedDoc) => {
-          const clonedContent = clonedDoc.querySelector('[data-pdf-content]') as HTMLElement;
-          if (clonedContent) {
-            clonedContent.style.background = '#ffffff';
-            clonedContent.style.color = '#0f172a';
-          }
-          // Force high contrast on cloned panels for crisp print
-          const panels = clonedDoc.querySelectorAll('.panel');
-          panels.forEach((p) => {
-            (p as HTMLElement).style.background = '#ffffff';
-            (p as HTMLElement).style.color = '#0f172a';
-            (p as HTMLElement).style.borderColor = '#cbd5e1';
-            (p as HTMLElement).style.boxShadow = 'none';
-          });
-          const headings = clonedDoc.querySelectorAll('h1, h2, h3, h4, .panel-title');
-          headings.forEach((h) => {
-            (h as HTMLElement).style.color = '#0f172a';
-          });
-          const texts = clonedDoc.querySelectorAll('p, li, td, span');
-          texts.forEach((t) => {
-            if (!(t as HTMLElement).classList.contains('badge') && !(t as HTMLElement).classList.contains('live-dot')) {
-              (t as HTMLElement).style.color = '#1e293b';
-            }
-          });
-          const codeBlocks = clonedDoc.querySelectorAll('pre');
-          codeBlocks.forEach((c) => {
-            (c as HTMLElement).style.background = '#f1f5f9';
-            (c as HTMLElement).style.color = '#0f172a';
-            (c as HTMLElement).style.borderColor = '#cbd5e1';
-          });
-        }
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgWidth = pdfWidth - 20; // 10mm margins on left/right
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 10; // 10mm top margin
-
-      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-      heightLeft -= (pdfHeight - 20);
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + 10;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-        heightLeft -= (pdfHeight - 20);
-      }
-
-      pdf.save('Cisco_Zero_Trust_Working_Guideline.pdf');
-    } catch (err) {
-      console.error('PDF export failed:', err);
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   return (
     <div className="container" data-theme={theme} style={{ minHeight: '100vh', paddingBottom: '3rem' }}>
@@ -157,15 +78,6 @@ export default function GuidePage() {
           </a>
 
           <button 
-            className="btn btn-primary" 
-            onClick={handleDownloadPdf}
-            disabled={isExporting}
-            style={{ padding: '6px 16px', fontSize: '0.8rem', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            {isExporting ? '⏳ Generating PDF...' : '📄 Download Guideline (PDF)'}
-          </button>
-
-          <button 
             className="btn btn-secondary" 
             onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
             style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px', background: 'var(--bg-glass-hover)', border: '1px solid var(--border-highlight)' }}
@@ -176,7 +88,7 @@ export default function GuidePage() {
       </header>
 
       {/* Main Guide Content (exact parity with WORKING_GUIDELINE.md) */}
-      <div ref={contentRef} style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', padding: '1rem', borderRadius: '12px', background: 'transparent' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', padding: '1rem', borderRadius: '12px', background: 'transparent' }}>
         
         {/* Banner Section */}
         <div className="panel" style={{ padding: '2.5rem', border: '1px solid var(--border-highlight)' }}>
