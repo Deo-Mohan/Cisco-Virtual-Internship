@@ -450,6 +450,7 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<'terraform' | 'k8s' | 'iam' | 'ciscoConfig'>('terraform');
   const [copiedStatus, setCopiedStatus] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [themeInitialized, setThemeInitialized] = useState(false);
   
   const [policyMode, setPolicyMode] = useState<'strict' | 'permissive'>('strict');
   const [activeRuleTarget, setActiveRuleTarget] = useState<'deny-research' | 'allow-db'>('deny-research');
@@ -471,14 +472,19 @@ export default function Home() {
     if (savedTheme === 'light' || savedTheme === 'dark') {
       setTheme(savedTheme);
       document.documentElement.setAttribute('data-theme', savedTheme);
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
+    setThemeInitialized(true);
   }, []);
 
   // Sync theme attribute on <html> element & persist to localStorage
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('cisco_zero_trust_theme', theme);
-  }, [theme]);
+    if (themeInitialized) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('cisco_zero_trust_theme', theme);
+    }
+  }, [theme, themeInitialized]);
 
   // Dynamic code files configuration
   const mockCodeFiles = {

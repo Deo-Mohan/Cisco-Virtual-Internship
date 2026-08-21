@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 export default function GuidePage() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [themeInitialized, setThemeInitialized] = useState(false);
 
   // Load saved theme from localStorage on mount
   React.useEffect(() => {
@@ -12,14 +13,19 @@ export default function GuidePage() {
     if (savedTheme === 'light' || savedTheme === 'dark') {
       setTheme(savedTheme);
       document.documentElement.setAttribute('data-theme', savedTheme);
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
+    setThemeInitialized(true);
   }, []);
 
   // Sync global document theme attribute & persist to localStorage
   React.useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('cisco_zero_trust_theme', theme);
-  }, [theme]);
+    if (themeInitialized) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('cisco_zero_trust_theme', theme);
+    }
+  }, [theme, themeInitialized]);
 
   return (
     <div className="container" data-theme={theme} style={{ minHeight: '100vh', paddingBottom: '3rem' }}>
