@@ -54,19 +54,45 @@ export default function GuidePage() {
   return (
     <div className="container" data-theme={theme} style={{ minHeight: '100vh', paddingBottom: '3rem' }}>
       {/* Header */}
-      <header style={{ marginBottom: '2rem' }}>
-        <div className="logo-section">
-          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <img 
-              src="/cisco-logo.png" 
-              alt="Cisco Logo" 
-              style={{ width: '48px', height: '48px', borderRadius: '12px', objectFit: 'cover', boxShadow: 'var(--shadow-glow)' }} 
-            />
-            <div className="logo-text">
-              <h1 style={{ fontSize: '1.4rem' }}>Working Guideline & Usage Manual</h1>
-              <p>Cisco Zero-Trust Hybrid Data Center Simulation</p>
-            </div>
+      <header style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '15px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <Link 
+            href="/" 
+            className="btn btn-secondary" 
+            title="Back to Simulator"
+            style={{ 
+              width: '40px',
+              height: '40px',
+              padding: 0,
+              fontSize: '1.2rem', 
+              borderRadius: '50%', 
+              textDecoration: 'none', 
+              fontWeight: 'bold',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid var(--border-color)',
+              background: 'rgba(0, 180, 216, 0.12)',
+              color: 'var(--cisco-blue)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}
+          >
+            ←
           </Link>
+
+          <div className="logo-section">
+            <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <img 
+                src="/cisco-logo.png" 
+                alt="Cisco Logo" 
+                style={{ width: '44px', height: '44px', borderRadius: '12px', objectFit: 'cover', boxShadow: 'var(--shadow-glow)' }} 
+              />
+              <div className="logo-text">
+                <h1 style={{ fontSize: '1.3rem' }}>Working Guideline & Usage Manual</h1>
+                <p>Cisco Zero-Trust Hybrid Data Center Simulation</p>
+              </div>
+            </Link>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -106,10 +132,6 @@ export default function GuidePage() {
           >
             {isExporting ? '⏳ Generating PDF...' : '📄 Download Guideline (PDF)'}
           </button>
-
-          <Link href="/" className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '8px', textDecoration: 'none' }}>
-            ← Back to Simulator
-          </Link>
         </div>
       </header>
 
