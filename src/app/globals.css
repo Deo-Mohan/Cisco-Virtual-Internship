@@ -972,3 +972,15 @@ header {
   background-color: var(--danger);
   box-shadow: 0 0 10px var(--danger);
 }
+
+/* Animated Dash Flows */
+.flowing-path {
+  stroke-dasharray: 8, 4;
+  animation: flowDash 0.8s infinite linear;
+}
+
+@keyframes flowDash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
