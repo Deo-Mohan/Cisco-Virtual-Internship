@@ -298,7 +298,9 @@
 
 [data-theme='light'] .guide-toc-link:hover {
   color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(0, 180, 216, 0.2) !important;
+  background: linear-gradient(135deg, var(--cisco-blue), var(--accent-cyan)) !important;
+  border-color: var(--cisco-blue) !important;
+  box-shadow: 0 4px 12px rgba(0, 180, 216, 0.25) !important;
 }
 
 [data-theme='light'] select,
