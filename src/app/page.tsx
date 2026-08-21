@@ -897,7 +897,7 @@ Configuration:
               {/* 1. Public Internet Node */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'internet') || null)}>
                 <circle cx="75" cy="225" r="36" fill="rgba(0, 180, 216, 0.05)" filter="url(#cisco-glow)" />
-                <circle cx="75" cy="225" r="28" fill="#080e1a" stroke="var(--accent-cyan)" strokeWidth="2" />
+                <circle cx="75" cy="225" r="28" fill="var(--node-bg)" stroke="var(--accent-cyan)" strokeWidth="2" />
                 {/* Globe arcs */}
                 <ellipse cx="75" cy="225" rx="28" ry="10" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeOpacity="0.4" />
                 <ellipse cx="75" cy="225" rx="10" ry="28" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeOpacity="0.4" />
@@ -908,7 +908,7 @@ Configuration:
 
               {/* 2. On-Prem Data Center Node */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'onprem') || null)}>
-                <rect x="35" y="315" width="80" height="60" rx="8" fill="#080e1a" stroke="var(--accent-cyan)" strokeWidth="2" />
+                <rect x="35" y="315" width="80" height="60" rx="8" fill="var(--node-bg)" stroke="var(--accent-cyan)" strokeWidth="2" />
                 {/* server chassis drawers */}
                 <rect x="43" y="323" width="64" height="10" rx="2" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" />
                 <circle cx="49" cy="328" r="2" fill="var(--success)">
@@ -939,7 +939,7 @@ Configuration:
 
               {/* 3. Cisco ASA Security Gateway */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'vpn') || null)}>
-                <circle cx="225" cy="345" r="26" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <circle cx="225" cy="345" r="26" fill="var(--node-bg)" stroke="var(--cisco-blue)" strokeWidth="2" />
                 <circle cx="225" cy="345" r="31" fill="none" stroke="rgba(0, 180, 216, 0.25)" strokeWidth="1" strokeDasharray="3,3" />
                 {/* Brickwall firewall representation */}
                 <path d="M 213 336 H 237 M 213 344 H 237 M 213 352 H 237 M 219 336 V 344 M 231 336 V 344 M 214 344 V 352 M 225 344 V 352 M 235 344 V 352" fill="none" stroke="#fff" strokeWidth="1.5" strokeOpacity="0.85" />
@@ -954,7 +954,7 @@ Configuration:
                   <animate attributeName="opacity" values="0.8;0;0.8" dur="4s" repeatCount="indefinite" />
                 </circle>
                 <circle cx="300" cy="225" r="48" fill="rgba(0, 180, 216, 0.12)" filter="url(#cisco-glow)" />
-                <circle cx="300" cy="225" r="38" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="3" />
+                <circle cx="300" cy="225" r="38" fill="var(--node-bg)" stroke="var(--cisco-blue)" strokeWidth="3" />
                 {/* Rotating dash ring for inspection */}
                 <circle cx="300" cy="225" r="30" fill="none" stroke="var(--accent-cyan)" strokeWidth="2" strokeDasharray="6,4">
                   <animateTransform attributeName="transform" type="rotate" from="0 300 225" to="360 300 225" dur="12s" repeatCount="indefinite" />
@@ -966,7 +966,7 @@ Configuration:
 
               {/* 5. Student Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-student') || null)}>
-                <rect x="640" y="50" width="150" height="60" rx="8" fill="rgba(8, 14, 26, 0.9)" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <rect x="640" y="50" width="150" height="60" rx="8" fill="var(--node-bg)" stroke="var(--cisco-blue)" strokeWidth="2" />
                 {/* Status indicator LED in spoke */}
                 <circle cx="778" cy="62" r="3" fill="var(--success)" className="live-ticking-dot" />
                 {/* Cap icon */}
@@ -980,7 +980,7 @@ Configuration:
 
               {/* 6. Faculty Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-faculty') || null)}>
-                <rect x="640" y="195" width="150" height="60" rx="8" fill="rgba(8, 14, 26, 0.9)" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <rect x="640" y="195" width="150" height="60" rx="8" fill="var(--node-bg)" stroke="var(--cisco-blue)" strokeWidth="2" />
                 {/* Status indicator LED in spoke */}
                 <circle cx="778" cy="207" r="3" fill="var(--success)" className="live-ticking-dot" />
                 {/* Padlock icon */}
@@ -994,7 +994,7 @@ Configuration:
               {/* 7. Research Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-research') || null)}>
                 <rect x="640" y="340" width="155" height="60" rx="8" 
-                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(8, 14, 26, 0.9)'} 
+                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'rgba(239, 68, 68, 0.15)' : 'var(--node-bg)'} 
                   stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--cisco-blue)'} 
                   strokeWidth="2" 
                   className={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'network-node-indicator threat' : ''} />
@@ -1176,7 +1176,7 @@ Configuration:
                         color: log.type === 'danger' ? 'var(--danger)' : 
                                log.type === 'warning' ? 'var(--warning)' : 
                                log.type === 'success' ? 'var(--success)' : 
-                               log.type === 'cisco' ? 'var(--cisco-blue)' : '#cbd5e1',
+                               log.type === 'cisco' ? 'var(--cisco-blue)' : 'var(--text-secondary)',
                         fontWeight: log.type === 'danger' || log.type === 'warning' ? 'bold' : 'normal'
                       }}>
                         {log.source}: {log.message}
