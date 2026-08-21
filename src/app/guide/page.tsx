@@ -58,13 +58,13 @@ export default function GuidePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Link 
             href="/" 
-            className="btn btn-secondary" 
+            className="btn btn-secondary back-arrow-btn" 
             title="Back to Simulator"
             style={{ 
-              width: '40px',
-              height: '40px',
+              width: '42px',
+              height: '42px',
               padding: 0,
-              fontSize: '1.2rem', 
+              fontSize: '1.25rem', 
               borderRadius: '50%', 
               textDecoration: 'none', 
               fontWeight: 'bold',
@@ -74,10 +74,11 @@ export default function GuidePage() {
               border: '1px solid var(--border-color)',
               background: 'rgba(0, 180, 216, 0.12)',
               color: 'var(--cisco-blue)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
-            ←
+            <span style={{ display: 'inline-block', transition: 'transform 0.25s ease' }} className="arrow-icon">←</span>
           </Link>
 
           <div className="logo-section">
@@ -117,20 +118,20 @@ export default function GuidePage() {
           </a>
 
           <button 
-            className="btn btn-secondary" 
-            onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-            style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px' }}
-          >
-            {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
-          </button>
-
-          <button 
             className="btn btn-primary" 
             onClick={handleDownloadPdf}
             disabled={isExporting}
             style={{ padding: '6px 16px', fontSize: '0.8rem', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             {isExporting ? '⏳ Generating PDF...' : '📄 Download Guideline (PDF)'}
+          </button>
+
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+            style={{ padding: '6px 14px', fontSize: '0.75rem', borderRadius: '20px', background: 'var(--bg-glass-hover)', border: '1px solid var(--border-highlight)' }}
+          >
+            {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
           </button>
         </div>
       </header>
