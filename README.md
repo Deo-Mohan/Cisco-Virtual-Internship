@@ -4,6 +4,10 @@ This repository contains the production-ready simulation portal and infrastructu
 
 ---
 
+> **📘 [Working Guideline →](./WORKING_GUIDELINE.md)** — Step-by-step instructions for using this portal with Cisco Packet Tracer, understanding visual indicators, running threat simulations, and troubleshooting.
+
+---
+
 ## 🏗️ Architecture Overview
 
 The system models a secure **Hub-and-Spoke** network layout to partition student services, faculty resources, and research environments:

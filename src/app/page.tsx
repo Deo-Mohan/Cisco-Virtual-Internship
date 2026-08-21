@@ -95,9 +95,11 @@ const initialNodes: NetworkNode[] = [
   }
 ];
 
-const mockCodeFiles = {
-  terraform: `# Hub and Spoke VPC setup for the hybrid data center
-# Using Terraform to provision network segments
+const getDynamicCode = (file: string, policyMode: 'strict' | 'permissive', activeRuleTarget: 'deny-research' | 'allow-db') => {
+  if (file === 'terraform') {
+    return policyMode === 'strict' 
+? `# Hub and Spoke VPC setup for the hybrid data center
+# Zero-Trust Strict mode active: routing via Inspection VPC enabled.
 
 resource "aws_vpc" "hub" {
   cidr_block           = "10.0.0.0/16"
@@ -111,52 +113,84 @@ resource "aws_vpc" "hub" {
 resource "aws_vpc" "student" {
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
-  tags = {
-    Name = "spoke-student-vpc"
-    Tier = "Student-Services"
-  }
-}
-
-resource "aws_vpc" "faculty" {
-  cidr_block           = "10.2.0.0/16"
-  enable_dns_hostnames = true
-  tags = {
-    Name = "spoke-faculty-exam-vpc"
-    Tier = "Academic-Administration"
-  }
 }
 
 resource "aws_vpc" "research" {
   cidr_block           = "10.3.0.0/16"
   enable_dns_hostnames = true
-  tags = {
-    Name = "spoke-research-vpc"
-    Tier = "Research-Sandbox"
-  }
 }
 
-# peering spokes back to hub - no spoke-to-spoke direct routing allowed
+# Peering connections (Hub and Spoke architecture)
 resource "aws_vpc_peering_connection" "hub_to_student" {
   vpc_id        = aws_vpc.hub.id
   peer_vpc_id   = aws_vpc.student.id
   auto_accept   = true
-  tags          = { Name = "peering-hub-student" }
-}
-
-resource "aws_vpc_peering_connection" "hub_to_faculty" {
-  vpc_id        = aws_vpc.hub.id
-  peer_vpc_id   = aws_vpc.faculty.id
-  auto_accept   = true
-  tags          = { Name = "peering-hub-faculty" }
 }
 
 resource "aws_vpc_peering_connection" "hub_to_research" {
   vpc_id        = aws_vpc.hub.id
   peer_vpc_id   = aws_vpc.research.id
   auto_accept   = true
-  tags          = { Name = "peering-hub-research" }
-}`,
-  k8s: `# K8s network policy to isolate our pods
+}
+
+# Zero-Trust Policy: All traffic routed via Transit Gateway (TGW) for firewall inspection
+resource "aws_route_table" "spoke_research" {
+  vpc_id = aws_vpc.research.id
+  
+  # Send 0.0.0.0/0 to central Inspection Hub VPC rather than direct peering
+  route {
+    cidr_block         = "0.0.0.0/0"
+    transit_gateway_id = aws_ec2_transit_gateway.hub.id
+  }
+  
+  tags = {
+    Name = "rtb-spoke-research-strict"
+    Policy = "Transit-Inspection-Required"
+  }
+}`
+: `# Hub and Spoke VPC setup (Permissive/Legacy Mode)
+# WARNING: Strict transit gateway micro-segmentation is disabled.
+
+resource "aws_vpc" "hub" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+}
+
+resource "aws_vpc" "student" {
+  cidr_block           = "10.1.0.0/16"
+  enable_dns_hostnames = true
+}
+
+resource "aws_vpc" "research" {
+  cidr_block           = "10.3.0.0/16"
+  enable_dns_hostnames = true
+}
+
+# Permissive direct routing bypassing Central Inspection Hub
+resource "aws_route_table" "spoke_research" {
+  vpc_id = aws_vpc.research.id
+
+  # Direct routing between spokes allowed without firewall filter
+  route {
+    cidr_block                = "10.1.0.0/16" # Student Subnet
+    vpc_peering_connection_id = aws_vpc_peering_connection.hub_to_student.id
+  }
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.direct_internet.id
+  }
+
+  tags = {
+    Name = "rtb-spoke-research-permissive"
+    Policy = "Direct-Uninspected"
+  }
+}`;
+  }
+
+  if (file === 'k8s') {
+    return policyMode === 'strict'
+? `# K8s network policy to isolate our pods
 # Block everything by default and open only what is needed
 
 apiVersion: networking.k8s.io/v1
@@ -214,8 +248,29 @@ spec:
           k8s-app: kube-dns
     ports:
     - protocol: UDP
-      port: 53`,
-  iam: `# IAM configuration for pods (Workload Identity)
+      port: 53`
+: `# K8s network policy (Permissive/Default-Allow Mode)
+# WARNING: Namespace isolation and lateral restrictions are disabled.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-ingress-egress
+  namespace: research
+spec:
+  podSelector: {} # Selects all workloads
+  ingress:
+  - {} # Allows traffic from any namespace/pod
+  egress:
+  - {} # Allows egress to any namespace/pod
+  policyTypes:
+  - Ingress
+  - Egress`;
+  }
+
+  if (file === 'iam') {
+    return policyMode === 'strict'
+? `# IAM configuration for pods (Workload Identity)
 # Least-privilege roles for the apps
 
 {
@@ -247,9 +302,27 @@ spec:
       "Resource": "*"
     }
   ]
-}`,
-  ciscoConfig: `! Cisco ASA Firewall configurations
-! Enforce Access Control Lists (ACLs) to block transit traffic between spokes
+}`
+: `# IAM configuration (Permissive Wildcard Access)
+# WARNING: Violates Principle of Least Privilege.
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PermissiveSandboxAccess",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*"
+    }
+  ]
+}`;
+  }
+
+  // ciscoConfig
+  return activeRuleTarget === 'deny-research'
+? `! Cisco ASA Firewall configurations
+! ENFORCE ISOLATION: access-list denies research spoke transit
 
 interface GigabitEthernet1/1
  nameif outside
@@ -264,26 +337,75 @@ interface GigabitEthernet1/2
 ! deny traffic from research (10.3.0.0) to student (10.1.0.0) and faculty/exam (10.2.0.0)
 access-list SEGMENTATION-ASA extended deny ip 10.3.0.0 255.255.0.0 10.1.0.0 255.255.0.0
 access-list SEGMENTATION-ASA extended deny ip 10.3.0.0 255.255.0.0 10.2.0.0 255.255.0.0
-! allow db traffic for the research segment
+! permit other general internet and db connections
 access-list SEGMENTATION-ASA extended permit tcp 10.3.0.0 255.255.0.0 host 10.3.2.10 eq 5432
-! bind access control list to the outside interface
-access-group SEGMENTATION-ASA in interface outside
+access-list SEGMENTATION-ASA extended permit ip any any
+! bind access control list to outside interface
+access-group SEGMENTATION-ASA in interface outside`
+: `! Cisco ASA Firewall configurations
+! AUTHORIZE ACCESS: permit database traffic specifically
+
+interface GigabitEthernet1/1
+ nameif outside
+ security-level 0
+ ip address 198.51.100.1 255.255.255.252
 !
-! VPN tunnel setup to on-premises gateway (10.10.0.0)
-crypto ikev2 policy 10
- encryption aes-256
- integrity sha256
- group 19
- lifetime seconds 86400
+interface GigabitEthernet1/2
+ nameif inside
+ security-level 100
+ ip address 10.10.1.1 255.255.255.0
 !
-crypto ipsec ikev2 ipsec-proposal PROPOSAL-AES256
- protocol esp encryption aes-256
- protocol esp integrity sha-256
-!
-crypto map MAP-HYBRID 10 match address IPSEC-ACL
-crypto map MAP-HYBRID 10 set peer 203.0.113.2
-crypto map MAP-HYBRID 10 set ikev2 ipsec-proposal PROPOSAL-AES256
-crypto map MAP-HYBRID interface outside`
+! Explicit permit rule for Student App pods to access local master database
+access-list DATABASE-ASA extended permit tcp 10.1.0.0 255.255.0.0 host 10.10.2.10 eq 5432
+! Deny all other databases ingress from spokes
+access-list DATABASE-ASA extended deny tcp any host 10.10.2.10 eq 5432
+access-list DATABASE-ASA extended permit ip any any
+! Bind to GigabitEthernet1/1 interface
+access-group DATABASE-ASA in interface outside`;
+};
+
+const getPillStyle = (detail: string, index: number) => {
+  const text = detail.toLowerCase();
+  let bg = 'rgba(0, 180, 216, 0.06)';
+  let border = 'rgba(0, 180, 216, 0.15)';
+  let color = 'var(--accent-cyan)';
+  
+  if (text.includes('deny') || text.includes('block') || text.includes('restrict') || text.includes('isolate') || text.includes('firewall') || text.includes('threat')) {
+    bg = 'rgba(239, 68, 68, 0.08)';
+    border = 'rgba(239, 68, 68, 0.2)';
+    color = 'var(--danger)';
+  } else if (text.includes('allow') || text.includes('permit') || text.includes('safe') || text.includes('success') || text.includes('log') || text.includes('gateway') || text.includes('transit')) {
+    bg = 'rgba(16, 185, 129, 0.08)';
+    border = 'rgba(16, 185, 129, 0.2)';
+    color = 'var(--success)';
+  } else if (text.includes('db') || text.includes('database') || text.includes('sql') || text.includes('subnet') || text.includes('policy') || text.includes('identity')) {
+    bg = 'rgba(139, 92, 246, 0.08)';
+    border = 'rgba(139, 92, 246, 0.2)';
+    color = '#a78bfa';
+  } else {
+    const colors = [
+      { bg: 'rgba(0, 180, 216, 0.06)', border: 'rgba(0, 180, 216, 0.15)', color: 'var(--cisco-blue)' },
+      { bg: 'rgba(6, 182, 212, 0.06)', border: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)' },
+      { bg: 'rgba(245, 158, 11, 0.06)', border: 'rgba(245, 158, 11, 0.15)', color: 'var(--warning)' }
+    ];
+    const picked = colors[index % colors.length];
+    bg = picked.bg;
+    border = picked.border;
+    color = picked.color;
+  }
+  
+  return {
+    fontSize: '0.62rem',
+    fontWeight: '700' as const,
+    padding: '3px 8px',
+    background: bg,
+    border: `1px solid ${border}`,
+    borderRadius: '50px',
+    color: color,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.3px',
+    boxShadow: `0 1px 3px ${bg}`
+  };
 };
 
 export default function Home() {
@@ -294,6 +416,10 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<'terraform' | 'k8s' | 'iam' | 'ciscoConfig'>('terraform');
   const [copiedStatus, setCopiedStatus] = useState<boolean>(false);
   
+  const [policyMode, setPolicyMode] = useState<'strict' | 'permissive'>('strict');
+  const [activeRuleTarget, setActiveRuleTarget] = useState<'deny-research' | 'allow-db'>('deny-research');
+  const [metricsHistory, setMetricsHistory] = useState<number[]>([15, 22, 18, 14, 16, 25, 18, 20, 24, 28, 22, 19, 21, 26, 23]);
+
   const [simulationState, setSimulationState] = useState<'idle' | 'running' | 'contained'>('idle');
   const [logs, setLogs] = useState<LogEntry[]>([
     { timestamp: '13:46:02', source: 'SYS', message: 'Zero-Trust Hybrid Data Center security monitor online.', type: 'info' },
@@ -304,12 +430,39 @@ export default function Home() {
   
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
-  // auto scroll logs to bottom whenever they update
+  // Dynamic code files configuration
+  const mockCodeFiles = {
+    terraform: getDynamicCode('terraform', policyMode, activeRuleTarget),
+    k8s: getDynamicCode('k8s', policyMode, activeRuleTarget),
+    iam: getDynamicCode('iam', policyMode, activeRuleTarget),
+    ciscoConfig: getDynamicCode('ciscoConfig', policyMode, activeRuleTarget)
+  };
+
+  // auto scroll logs to bottom — only scroll the terminal container, NOT the whole page
   useEffect(() => {
-    if (consoleEndRef.current) {
-      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (consoleEndRef.current?.parentElement) {
+      const container = consoleEndRef.current.parentElement;
+      container.scrollTop = container.scrollHeight;
     }
   }, [logs]);
+
+  // Real-time Firewall Telemetry history ticking
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMetricsHistory((prev) => {
+        let nextVal = 0;
+        if (simulationState === 'idle') {
+          nextVal = Math.floor(Math.random() * 15) + 15; // 15-30
+        } else if (simulationState === 'running') {
+          nextVal = Math.floor(Math.random() * 60) + 90; // 90-150 (breach spikes)
+        } else {
+          nextVal = Math.floor(Math.random() * 10) + 12; // 12-22 (contained)
+        }
+        return [...prev.slice(1), nextVal];
+      });
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [simulationState]);
 
   const addLog = (source: string, message: string, type: 'info' | 'success' | 'warning' | 'danger' | 'cisco') => {
     const time = new Date().toTimeString().split(' ')[0];
@@ -553,67 +706,120 @@ Configuration:
                 </pattern>
                 
                 {/* Glow Filters */}
-                <filter id="cisco-glow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="4" result="blur" />
+                <filter id="cisco-glow" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="5" result="blur" />
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
-                <filter id="threat-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <filter id="threat-glow" x="-30%" y="-30%" width="160%" height="160%">
                   <feGaussianBlur stdDeviation="6" result="blur" />
                   <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
+
+                {/* Path Gradients */}
+                <linearGradient id="cyan-to-blue" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="var(--accent-cyan)" />
+                  <stop offset="100%" stopColor="var(--cisco-blue)" />
+                </linearGradient>
+                <linearGradient id="blue-to-cyan" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="var(--cisco-blue)" />
+                  <stop offset="100%" stopColor="var(--accent-cyan)" />
+                </linearGradient>
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" />
 
               {/* Dynamic flowing traffic conduits */}
-              {/* Path 1: Internet to Hub */}
-              <path d="M 103 225 L 262 225" stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)'} strokeWidth="2.5" className="flowing-path" strokeOpacity="0.8" />
+              {/* Path 1: Internet to Hub (Solid public fiber line) */}
+              <path d="M 103 225 L 262 225" stroke={simulationState === 'running' ? 'var(--danger)' : 'url(#cyan-to-blue)'} strokeWidth="2.5" strokeOpacity="0.85" fill="none" />
               
-              {/* Path 2: Hub to Student */}
-              <path d="M 338 225 L 570 105" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
+              {/* Path 2: Hub to Student (Dashed virtual peering) */}
+              <path d="M 338 225 Q 480 120 640 80" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
               
-              {/* Path 3: Hub to Faculty */}
-              <path d="M 338 225 L 570 225" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
+              {/* Path 3: Hub to Faculty (Dashed virtual peering) */}
+              <path d="M 338 225 L 640 225" stroke="var(--cisco-blue)" strokeWidth="2" className={simulationState === 'idle' ? 'flowing-path' : ''} strokeOpacity={simulationState === 'idle' ? 0.8 : 0.25} fill="none" />
               
-              {/* Path 4: Hub to Research */}
-              <path d="M 338 225 L 570 345" stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--cisco-blue)'} strokeWidth="2" className="flowing-path" strokeOpacity={simulationState === 'contained' ? 0.25 : 0.8} fill="none" />
+              {/* Path 4: Hub to Research (Dashed virtual peering) */}
+              <path d="M 338 225 Q 480 330 640 370" stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--cisco-blue)'} strokeWidth="2" className="flowing-path" strokeOpacity={simulationState === 'contained' ? 0.25 : 0.8} fill="none" />
 
-              {/* Path 5: Hub to VPN Gateway */}
-              <path d="M 300 263 L 225 320" stroke="var(--cisco-blue)" strokeWidth="2" className="flowing-path" strokeOpacity="0.8" fill="none" />
+              {/* Path 5: Hub to VPN Gateway (Dashed VPN tunnel overlay) */}
+              <path d="M 300 263 Q 260 285 225 319" stroke="var(--cisco-blue)" strokeWidth="2" className="flowing-path" strokeOpacity="0.8" fill="none" />
               
-              {/* Path 6: VPN Gateway to On-Prem */}
-              <path d="M 200 345 L 115 345" stroke="var(--accent-cyan)" strokeWidth="2" className="flowing-path" strokeOpacity="0.8" fill="none" />
+              {/* Path 6: VPN Gateway to On-Prem (Solid physical LAN fiber line) */}
+              <path d="M 199 345 L 115 345" stroke="url(#blue-to-cyan)" strokeWidth="2.5" strokeOpacity="0.85" fill="none" />
 
-              {/* Packet dots flowing along paths */}
+              {/* Cisco Packet Tracer style envelope packets */}
               {simulationState === 'idle' && (
                 <>
-                  <circle r="4.5" fill="var(--success)" filter="url(#cisco-glow)">
-                    <animateMotion dur="3.5s" repeatCount="indefinite" path="M 103 225 L 262 225" />
-                  </circle>
-                  <circle r="4" fill="var(--success)">
-                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 338 225 L 570 105" />
-                  </circle>
-                  <circle r="4.5" fill="var(--accent-cyan)">
-                    <animateMotion dur="3s" repeatCount="indefinite" path="M 300 263 L 225 320" />
-                  </circle>
-                  <circle r="4" fill="var(--accent-cyan)">
-                    <animateMotion dur="2s" repeatCount="indefinite" path="M 200 345 L 115 345" />
-                  </circle>
+                  {/* Envelope: Internet → Hub */}
+                  <g filter="url(#cisco-glow)">
+                    <animateMotion dur="3s" repeatCount="indefinite" path="M 103 225 L 262 225" />
+                    <rect x="-8" y="-6" width="16" height="12" rx="2" fill="var(--success)" />
+                    <path d="M -8 -6 L 0 1 L 8 -6" fill="none" stroke="#080e1a" strokeWidth="1.5" />
+                  </g>
+
+                  {/* Envelope: Hub → Student */}
+                  <g filter="url(#cisco-glow)">
+                    <animateMotion dur="3s" repeatCount="indefinite" path="M 338 225 Q 480 120 640 80" />
+                    <rect x="-8" y="-6" width="16" height="12" rx="2" fill="var(--success)" />
+                    <path d="M -8 -6 L 0 1 L 8 -6" fill="none" stroke="#080e1a" strokeWidth="1.5" />
+                  </g>
+
+                  {/* Envelope: Hub → Faculty */}
+                  <g filter="url(#cisco-glow)">
+                    <animateMotion dur="3.2s" repeatCount="indefinite" path="M 338 225 L 640 225" />
+                    <rect x="-8" y="-6" width="16" height="12" rx="2" fill="var(--success)" />
+                    <path d="M -8 -6 L 0 1 L 8 -6" fill="none" stroke="#080e1a" strokeWidth="1.5" />
+                  </g>
+
+                  {/* Envelope: Hub → Research */}
+                  <g filter="url(#cisco-glow)">
+                    <animateMotion dur="3s" repeatCount="indefinite" path="M 338 225 Q 480 330 640 370" />
+                    <rect x="-8" y="-6" width="16" height="12" rx="2" fill="var(--success)" />
+                    <path d="M -8 -6 L 0 1 L 8 -6" fill="none" stroke="#080e1a" strokeWidth="1.5" />
+                  </g>
+
+                  {/* Envelope: VPN → Hub */}
+                  <g filter="url(#cisco-glow)">
+                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 225 319 Q 260 285 300 263" />
+                    <rect x="-7" y="-5" width="14" height="10" rx="2" fill="var(--accent-cyan)" />
+                    <path d="M -7 -5 L 0 1 L 7 -5" fill="none" stroke="#080e1a" strokeWidth="1.2" />
+                  </g>
+
+                  {/* Envelope: On-Prem → VPN */}
+                  <g filter="url(#cisco-glow)">
+                    <animateMotion dur="2s" repeatCount="indefinite" path="M 115 345 L 199 345" />
+                    <rect x="-7" y="-5" width="14" height="10" rx="2" fill="var(--accent-cyan)" />
+                    <path d="M -7 -5 L 0 1 L 7 -5" fill="none" stroke="#080e1a" strokeWidth="1.2" />
+                  </g>
                 </>
               )}
 
-              {/* Attack flow animation */}
+              {/* Attack flow — red threat envelopes */}
               {simulationState === 'running' && (
                 <>
-                  <circle r="5" fill="var(--danger)" filter="url(#threat-glow)">
-                    <animateMotion dur="1.8s" repeatCount="indefinite" path="M 103 225 L 262 225" />
-                  </circle>
-                  <circle r="5" fill="var(--danger)" filter="url(#threat-glow)">
-                    <animateMotion dur="1.4s" repeatCount="indefinite" path="M 338 225 L 570 345" />
-                  </circle>
-                  {/* Blocked attempts bouncing from Research spoke */}
-                  <circle r="4" fill="var(--danger)">
-                    <animateMotion dur="1s" repeatCount="indefinite" path="M 570 345 L 437.5 285" />
-                  </circle>
+                  {/* Threat Envelope: Internet → Hub */}
+                  <g filter="url(#threat-glow)">
+                    <animateMotion dur="2.4s" repeatCount="indefinite" path="M 103 225 L 262 225" />
+                    <rect x="-9" y="-7" width="18" height="14" rx="2" fill="var(--danger)" />
+                    <path d="M -9 -7 L 0 2 L 9 -7" fill="none" stroke="#080e1a" strokeWidth="1.5" />
+                    <text x="0" y="4" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold">!</text>
+                  </g>
+
+                  {/* Threat Envelope: Hub → Research */}
+                  <g filter="url(#threat-glow)">
+                    <animateMotion dur="2.2s" repeatCount="indefinite" path="M 338 225 Q 480 330 640 370" />
+                    <rect x="-9" y="-7" width="18" height="14" rx="2" fill="var(--danger)" />
+                    <path d="M -9 -7 L 0 2 L 9 -7" fill="none" stroke="#080e1a" strokeWidth="1.5" />
+                    <text x="0" y="4" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="bold">!</text>
+                  </g>
+
+                  {/* Blocked bounce-back from Research */}
+                  <g filter="url(#threat-glow)" opacity="0.85">
+                    <animateMotion dur="2.0s" repeatCount="indefinite" path="M 640 370 Q 520 330 460 290" />
+                    <rect x="-8" y="-6" width="16" height="12" rx="2" fill="#f97316" />
+                    <path d="M -8 -6 L 0 1 L 8 -6" fill="none" stroke="#080e1a" strokeWidth="1.2" />
+                    <line x1="-5" y1="-4" x2="5" y2="4" stroke="#fff" strokeWidth="2" />
+                    <line x1="5" y1="-4" x2="-5" y2="4" stroke="#fff" strokeWidth="2" />
+                  </g>
                 </>
               )}
 
@@ -621,29 +827,65 @@ Configuration:
               {simulationState === 'running' && (
                 <>
                   {/* block between Hub and Student */}
-                  <circle cx="437.5" cy="285" r="7" fill="var(--danger)" />
+                  <g filter="url(#threat-glow)" className="live-ticking-dot">
+                    <circle cx="490" cy="155" r="8" fill="var(--danger)" />
+                    <line x1="486.5" y1="155" x2="493.5" y2="155" stroke="#fff" strokeWidth="2" />
+                  </g>
                   {/* block between Hub and Faculty/Exam */}
-                  <circle cx="437.5" cy="345" r="7" fill="var(--danger)" />
+                  <g filter="url(#threat-glow)" className="live-ticking-dot">
+                    <circle cx="490" cy="225" r="8" fill="var(--danger)" />
+                    <line x1="486.5" y1="225" x2="493.5" y2="225" stroke="#fff" strokeWidth="2" />
+                  </g>
                 </>
               )}
 
               {/* Contained shield overlay on Research Spoke */}
               {simulationState === 'contained' && (
                 <g>
-                  <circle cx="660" cy="345" r="42" fill="none" stroke="var(--success)" strokeWidth="2.5" className="shield-ring" />
-                  <circle cx="660" cy="345" r="54" fill="none" stroke="var(--success)" strokeWidth="1.5" className="shield-ring" style={{ animationDelay: '0.6s' }} />
+                  <circle cx="715" cy="370" r="42" fill="none" stroke="var(--success)" strokeWidth="2.5" className="shield-ring" />
+                  <circle cx="715" cy="370" r="54" fill="none" stroke="var(--success)" strokeWidth="1.5" className="shield-ring" style={{ animationDelay: '0.6s' }} />
                 </g>
               )}
 
+              {/* Cisco Packet Tracer — endpoint interface labels & link-light dots */}
+              <g className="cisco-link-decorations" style={{ fontSize: '7.5px', fontFamily: 'var(--font-mono)', fill: 'rgba(255, 255, 255, 0.4)' }}>
+                {/* Internet endpoint */}
+                <circle cx="116" cy="225" r="2.5" fill="var(--success)" />
+                <text x="116" y="214" textAnchor="middle">fa0/0</text>
+
+                {/* Student Spoke endpoint */}
+                <circle cx="633" cy="83" r="2.5" fill="var(--success)" />
+                <text x="623" y="74" textAnchor="end">fa0/1</text>
+
+                {/* Faculty/Exam endpoint */}
+                <circle cx="633" cy="225" r="2.5" fill="var(--success)" />
+                <text x="623" y="216" textAnchor="end">fa0/1</text>
+
+                {/* Research Spoke endpoint — dynamic status */}
+                <circle cx="633" cy="369" r="2.5" 
+                  fill={simulationState === 'running' ? 'var(--danger)' : simulationState === 'contained' ? 'var(--warning)' : 'var(--success)'} 
+                  className={simulationState !== 'idle' ? 'live-ticking-dot' : ''} />
+                <text x="623" y="360" textAnchor="end">fa0/1</text>
+
+                {/* VPN Gateway endpoint */}
+                <circle cx="239" cy="325" r="2.5" fill="var(--success)" />
+                <text x="248" y="317" textAnchor="start">g0/0</text>
+
+                {/* On-Prem DC endpoint */}
+                <circle cx="123" cy="345" r="2.5" fill="var(--success)" />
+                <text x="133" y="336" textAnchor="start">fa0/0</text>
+              </g>
+
               {/* 1. Public Internet Node */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'internet') || null)}>
-                <circle cx="75" cy="225" r="28" fill="#080e1a" stroke="var(--accent-cyan)" strokeWidth="2" filter="url(#cisco-glow)" />
+                <circle cx="75" cy="225" r="36" fill="rgba(0, 180, 216, 0.05)" filter="url(#cisco-glow)" />
+                <circle cx="75" cy="225" r="28" fill="#080e1a" stroke="var(--accent-cyan)" strokeWidth="2" />
                 {/* Globe arcs */}
                 <ellipse cx="75" cy="225" rx="28" ry="10" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeOpacity="0.4" />
                 <ellipse cx="75" cy="225" rx="10" ry="28" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeOpacity="0.4" />
                 <line x1="47" y1="225" x2="103" y2="225" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeOpacity="0.4" />
                 <line x1="75" y1="197" x2="75" y2="253" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeOpacity="0.4" />
-                <text x="75" y="272" textAnchor="middle">Public Internet</text>
+                <text x="75" y="275" textAnchor="middle">Public Internet</text>
               </g>
 
               {/* 2. On-Prem Data Center Node */}
@@ -651,17 +893,36 @@ Configuration:
                 <rect x="35" y="315" width="80" height="60" rx="8" fill="#080e1a" stroke="var(--accent-cyan)" strokeWidth="2" />
                 {/* server chassis drawers */}
                 <rect x="43" y="323" width="64" height="10" rx="2" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" />
-                <circle cx="49" cy="328" r="2.5" fill="var(--success)" />
+                <circle cx="49" cy="328" r="2" fill="var(--success)">
+                  <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="95" cy="328" r="1.5" fill="#f59e0b">
+                  <animate attributeName="opacity" values="0.2;1;0.2" dur="0.6s" repeatCount="indefinite" />
+                </circle>
+                
                 <rect x="43" y="337" width="64" height="10" rx="2" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" />
-                <circle cx="49" cy="342" r="2.5" fill="var(--success)" />
+                <circle cx="49" cy="342" r="2" fill="var(--success)">
+                  <animate attributeName="opacity" values="1;0.3;1" dur="0.8s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="95" cy="342" r="1.5" fill="#f59e0b">
+                  <animate attributeName="opacity" values="0.1;1;0.1" dur="0.9s" repeatCount="indefinite" />
+                </circle>
+
                 <rect x="43" y="351" width="64" height="10" rx="2" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" />
-                <circle cx="49" cy="356" r="2.5" fill="var(--success)" />
+                <circle cx="49" cy="356" r="2" fill="var(--success)">
+                  <animate attributeName="opacity" values="1;0.1;1" dur="1.6s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="95" cy="356" r="1.5" fill="#f59e0b">
+                  <animate attributeName="opacity" values="0.3;1;0.3" dur="0.4s" repeatCount="indefinite" />
+                </circle>
+
                 <text x="75" y="396" textAnchor="middle">Private DC Core</text>
               </g>
 
               {/* 3. Cisco ASA Security Gateway */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'vpn') || null)}>
                 <circle cx="225" cy="345" r="26" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <circle cx="225" cy="345" r="31" fill="none" stroke="rgba(0, 180, 216, 0.25)" strokeWidth="1" strokeDasharray="3,3" />
                 {/* Brickwall firewall representation */}
                 <path d="M 213 336 H 237 M 213 344 H 237 M 213 352 H 237 M 219 336 V 344 M 231 336 V 344 M 214 344 V 352 M 225 344 V 352 M 235 344 V 352" fill="none" stroke="#fff" strokeWidth="1.5" strokeOpacity="0.85" />
                 <text x="225" y="390" textAnchor="middle">Cisco ASA VPN</text>
@@ -669,7 +930,13 @@ Configuration:
 
               {/* 4. Transit Hub VPC Node */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'hub') || null)}>
-                <circle cx="300" cy="225" r="38" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="3" filter="url(#cisco-glow)" />
+                {/* Expanding sonar radar sweeps */}
+                <circle cx="300" cy="225" r="38" fill="none" stroke="var(--cisco-blue)" strokeWidth="1.5" opacity="0.8">
+                  <animate attributeName="r" values="38;70;38" dur="4s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.8;0;0.8" dur="4s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="300" cy="225" r="48" fill="rgba(0, 180, 216, 0.12)" filter="url(#cisco-glow)" />
+                <circle cx="300" cy="225" r="38" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="3" />
                 {/* Rotating dash ring for inspection */}
                 <circle cx="300" cy="225" r="30" fill="none" stroke="var(--accent-cyan)" strokeWidth="2" strokeDasharray="6,4">
                   <animateTransform attributeName="transform" type="rotate" from="0 300 225" to="360 300 225" dur="12s" repeatCount="indefinite" />
@@ -681,62 +948,168 @@ Configuration:
 
               {/* 5. Student Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-student') || null)}>
-                <rect x="575" y="75" width="170" height="60" rx="8" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <rect x="640" y="50" width="150" height="60" rx="8" fill="rgba(8, 14, 26, 0.9)" stroke="var(--cisco-blue)" strokeWidth="2" />
+                {/* Status indicator LED in spoke */}
+                <circle cx="778" cy="62" r="3" fill="var(--success)" className="live-ticking-dot" />
                 {/* Cap icon */}
-                <path d="M 590 102 L 602 96 L 614 102 L 602 108 Z" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
-                <path d="M 596 105 V 110 A 5 5 0 0 0 608 110 V 105" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
-                <line x1="614" y1="102" x2="614" y2="114" stroke="var(--accent-cyan)" strokeWidth="1" />
+                <path d="M 655 77 L 667 71 L 679 77 L 667 83 Z" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
+                <path d="M 661 80 V 85 A 5 5 0 0 0 673 85 V 80" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
+                <line x1="679" y1="77" x2="679" y2="89" stroke="var(--accent-cyan)" strokeWidth="1" />
                 
-                <text x="630" y="105" textAnchor="start" fill="#fff" style={{ fontSize: '11px', fontWeight: 'bold' }}>Student Spoke</text>
-                <text x="630" y="120" textAnchor="start" style={{ fontSize: '10px' }}>10.1.0.0/16</text>
+                <text x="695" y="78" textAnchor="start" fill="#fff" style={{ fontSize: '11px', fontWeight: 'bold' }}>Student Spoke</text>
+                <text x="695" y="93" textAnchor="start" style={{ fontSize: '10px' }}>10.1.0.0/16</text>
               </g>
 
               {/* 6. Faculty Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-faculty') || null)}>
-                <rect x="575" y="195" width="170" height="60" rx="8" fill="#080e1a" stroke="var(--cisco-blue)" strokeWidth="2" />
+                <rect x="640" y="195" width="150" height="60" rx="8" fill="rgba(8, 14, 26, 0.9)" stroke="var(--cisco-blue)" strokeWidth="2" />
+                {/* Status indicator LED in spoke */}
+                <circle cx="778" cy="207" r="3" fill="var(--success)" className="live-ticking-dot" />
                 {/* Padlock icon */}
-                <rect x="594" y="222" width="14" height="11" rx="1.5" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
-                <path d="M 597 222 V 218 A 3.5 3.5 0 0 1 604 218 V 222" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
+                <rect x="659" y="222" width="14" height="11" rx="1.5" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
+                <path d="M 662 222 V 218 A 3.5 3.5 0 0 1 669 218 V 222" fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" />
                 
-                <text x="630" y="225" textAnchor="start" fill="#fff" style={{ fontSize: '11px', fontWeight: 'bold' }}>Faculty/Exam</text>
-                <text x="630" y="240" textAnchor="start" style={{ fontSize: '10px' }}>10.2.0.0/16</text>
+                <text x="695" y="225" textAnchor="start" fill="#fff" style={{ fontSize: '11px', fontWeight: 'bold' }}>Faculty/Exam</text>
+                <text x="695" y="240" textAnchor="start" style={{ fontSize: '10px' }}>10.2.0.0/16</text>
               </g>
 
               {/* 7. Research Spoke VPC */}
               <g className="network-node" onClick={() => setSelectedNode(nodes.find(n => n.id === 'spoke-research') || null)}>
-                <rect x="575" y="315" width="170" height="60" rx="8" 
-                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'rgba(239, 68, 68, 0.08)' : '#080e1a'} 
+                <rect x="640" y="340" width="155" height="60" rx="8" 
+                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(8, 14, 26, 0.9)'} 
                   stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--cisco-blue)'} 
                   strokeWidth="2" 
                   className={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'network-node-indicator threat' : ''} />
+                {/* Status indicator LED in Research spoke */}
+                <circle cx="778" cy="352" r="3" 
+                  fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : nodes.find(n => n.id === 'spoke-research')?.status === 'contained' ? 'var(--warning)' : 'var(--success)'} 
+                  className="live-ticking-dot" />
                 {/* Flask icon */}
-                <path d="M 598 335 H 608 M 603 335 V 341 L 594 355 A 2.5 2.5 0 0 0 596 359 H 610 A 2.5 2.5 0 0 0 612 355 L 603 341" fill="none" stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--accent-cyan)'} strokeWidth="1.5" />
+                <path d="M 663 360 H 673 M 668 360 V 366 L 659 380 A 2.5 2.5 0 0 0 661 384 H 675 A 2.5 2.5 0 0 0 677 380 L 668 366" fill="none" stroke={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : 'var(--accent-cyan)'} strokeWidth="1.5" />
                 
-                <text x="630" y="345" textAnchor="start" fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : '#fff'} style={{ fontSize: '11px', fontWeight: 'bold' }}>
+                <text x="695" y="370" textAnchor="start" fill={nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? 'var(--danger)' : '#fff'} style={{ fontSize: '11px', fontWeight: 'bold' }}>
                   {nodes.find(n => n.id === 'spoke-research')?.status === 'threat' ? '⚠️ Research Spoke' : 'Research Spoke'}
                 </text>
-                <text x="630" y="360" textAnchor="start" style={{ fontSize: '10px' }}>10.3.0.0/16</text>
+                <text x="695" y="385" textAnchor="start" style={{ fontSize: '10px' }}>10.3.0.0/16</text>
               </g>
             </svg>
           </div>
 
-          {/* Node Inspector Details */}
-          {selectedNode && (
-            <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <h3 style={{ fontSize: '0.9rem', color: '#fff' }}>{selectedNode.name}</h3>
-                <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{selectedNode.ip}</span>
+          {/* Responsive Node Inspector & Live Security Metrics Grid */}
+          <div className="inspector-telemetry-grid">
+            {/* Node Inspector Details */}
+            {selectedNode ? (() => {
+              let accentColor = 'var(--cisco-blue)';
+              if (selectedNode.id === 'spoke-research') {
+                accentColor = selectedNode.status === 'threat' ? 'var(--danger)' : 'var(--warning)';
+              } else if (selectedNode.id === 'spoke-student') {
+                accentColor = 'var(--accent-cyan)';
+              } else if (selectedNode.id === 'internet') {
+                accentColor = '#94a3b8';
+              } else if (selectedNode.id === 'vpn' || selectedNode.id === 'onprem') {
+                accentColor = 'var(--accent-cyan)';
+              }
+              
+              return (
+                <div style={{ padding: '1rem 1rem 1rem 1.25rem', background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%)', border: '1px solid rgba(255, 255, 255, 0.07)', borderLeft: `3.5px solid ${accentColor}`, borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', backdropFilter: 'blur(12px)' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
+                      <h3 style={{ fontSize: '0.9rem', color: '#fff', margin: 0, fontWeight: '700' }}>{selectedNode.name}</h3>
+                      <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)', fontWeight: 'bold' }}>{selectedNode.ip}</span>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: '1.45' }}>{selectedNode.description}</p>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: 'auto' }}>
+                    {selectedNode.details.map((detail, index) => (
+                      <span key={index} style={getPillStyle(detail, index)}>
+                        {detail}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : (
+              <div style={{ padding: '1rem 1rem 1rem 1.25rem', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderLeft: '3.5px solid rgba(255, 255, 255, 0.1)', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '130px' }}>
+                <h3 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>Node Inspector</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.45', margin: 0 }}>
+                  Click on any node in the topology map above to inspect its live routing configuration, security group details, and IP address boundaries.
+                </p>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>{selectedNode.description}</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {selectedNode.details.map((detail, index) => (
-                  <span key={index} style={{ fontSize: '0.7rem', padding: '3px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', color: 'var(--text-muted)' }}>
-                    {detail}
-                  </span>
-                ))}
+            )}
+
+            {/* Live Security Metrics & Threat Telemetry */}
+            <div className="metrics-panel-glass" style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="live-pulse-indicator" style={{ color: simulationState === 'running' ? 'var(--danger)' : simulationState === 'contained' ? 'var(--success)' : 'var(--accent-cyan)', background: 'currentColor' }}></span>
+                  <h4 style={{ fontSize: '0.85rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0 }}>Live Firewall Telemetry</h4>
+                </div>
+                <span style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>IPS: Active</span>
+              </div>
+              
+              {/* Quick Metrics HUD */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>Inspected Traffic</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
+                    {metricsHistory[metricsHistory.length - 1]} p/s
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>Blocked Threats</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: simulationState !== 'idle' ? 'var(--danger)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                    {simulationState === 'idle' ? '0' : simulationState === 'running' ? '28' : '42'}
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '2px' }}>CPU Load</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#fff', fontFamily: 'var(--font-mono)' }}>
+                    {simulationState === 'idle' ? '4.8%' : simulationState === 'running' ? '82.4%' : '12.1%'}
+                  </div>
+                </div>
+              </div>
+
+              {/* SVG Sparkline Area Graph */}
+              <div style={{ height: '65px', background: 'rgba(0,0,0,0.15)', borderRadius: '4px', padding: '4px', border: '1px solid rgba(255,255,255,0.02)', overflow: 'hidden' }}>
+                <svg width="100%" height="100%" viewBox="0 0 300 65" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="metricGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)'} stopOpacity="0.25" />
+                      <stop offset="100%" stopColor={simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)'} stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  {/* Horizontal Grid Lines */}
+                  <line x1="0" y1="16" x2="300" y2="16" stroke="rgba(255,255,255,0.04)" strokeDasharray="3,3" />
+                  <line x1="0" y1="32" x2="300" y2="32" stroke="rgba(255,255,255,0.04)" strokeDasharray="3,3" />
+                  <line x1="0" y1="48" x2="300" y2="48" stroke="rgba(255,255,255,0.04)" strokeDasharray="3,3" />
+                  
+                  {/* Area under curve */}
+                  <path
+                    d={`M 0 65 ${metricsHistory.map((val, idx) => `L ${(idx * 300) / 14} ${65 - (val / 160) * 55}`).join(' ')} L 300 65 Z`}
+                    fill="url(#metricGrad)"
+                  />
+                  
+                  {/* Curve Line */}
+                  <path
+                    d={metricsHistory.map((val, idx) => `${idx === 0 ? 'M' : 'L'} ${(idx * 300) / 14} ${65 - (val / 160) * 55}`).join(' ')}
+                    fill="none"
+                    stroke={simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)'}
+                    strokeWidth="1.5"
+                    style={{ transition: 'all 0.4s ease' }}
+                  />
+
+                  {/* Pulsing endpoint dot */}
+                  <circle
+                    cx="300"
+                    cy={65 - (metricsHistory[metricsHistory.length - 1] / 160) * 55}
+                    r="3.5"
+                    fill={simulationState === 'running' ? 'var(--danger)' : 'var(--accent-cyan)'}
+                    className="live-ticking-dot"
+                  />
+                </svg>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Controls bar */}
           <div className="controls-bar">
@@ -880,8 +1253,51 @@ Configuration:
         </div>
 
         {activeBottomTab === 'iac' && (
-          <div className="repo-explorer">
-            <div className="repo-sidebar">
+          <>
+            {/* Interactive IaC Policy Customizer Controls */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderBottom: 'none', borderTopLeftRadius: 'var(--radius-sm)', borderTopRightRadius: 'var(--radius-sm)', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <h4 style={{ fontSize: '0.8rem', color: '#fff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>IaC Policy Customizer</h4>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>Configure Zero-Trust environment variables and observe real-time policy configuration updates below.</p>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+                {/* Security Mode Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label htmlFor="secLevel" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Security Level:</label>
+                  <select
+                    id="secLevel"
+                    value={policyMode}
+                    onChange={(e) => {
+                      setPolicyMode(e.target.value as any);
+                      addLog('SYS', `IaC Policy: Changed Security Level to ${e.target.value === 'strict' ? 'STRICT ZERO-TRUST' : 'PERMISSIVE LEGACY'}.`, 'info');
+                    }}
+                    style={{ background: '#070b14', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', outline: 'none' }}
+                  >
+                    <option value="strict">Strict Zero-Trust (Default-Deny)</option>
+                    <option value="permissive">Permissive Routing (Bypass FW)</option>
+                  </select>
+                </div>
+                {/* Rule Focus Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label htmlFor="ruleFocus" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ASA Rule Target:</label>
+                  <select
+                    id="ruleFocus"
+                    value={activeRuleTarget}
+                    onChange={(e) => {
+                      setActiveRuleTarget(e.target.value as any);
+                      addLog('SYS', `IaC Policy: Updated Cisco ASA active access-group rules to target "${e.target.value}".`, 'info');
+                    }}
+                    style={{ background: '#070b14', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', outline: 'none' }}
+                  >
+                    <option value="deny-research">Isolate Research Spoke</option>
+                    <option value="allow-db">Authorize Student DB Access</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="repo-explorer" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+              <div className="repo-sidebar">
               <div className={`repo-item ${selectedFile === 'terraform' ? 'active' : ''}`} onClick={() => setSelectedFile('terraform')}>
                 📁 terraform/network.tf
               </div>
@@ -908,6 +1324,7 @@ Configuration:
               </div>
             </div>
           </div>
+          </>
         )}
 
         {activeBottomTab === 'sg-rules' && (
@@ -966,27 +1383,43 @@ Configuration:
       <footer className="footer-container">
         <div className="footer-grid">
           <div className="footer-col brand">
-            <div className="footer-logo">Cisco Zero-Trust Portal</div>
+            <div className="footer-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, var(--cisco-blue), var(--accent-cyan))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', color: '#fff', flexShrink: 0 }}>C</div>
+              Cisco Zero-Trust Portal
+            </div>
             <p>
               Designing and enforcing default-deny routing rules, Kubernetes container micro-segmentation, and secure Cisco ASA IPsec gateway connections.
             </p>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <a href="https://github.com/Deo-Mohan" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', transition: 'color 0.2s' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-cyan)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              </a>
+              <a href="https://www.linkedin.com/in/krishna-mohan-kumar/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', transition: 'color 0.2s' }} onMouseEnter={e => (e.currentTarget.style.color = '#0a66c2')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              </a>
+            </div>
           </div>
           <div className="footer-col links">
             <h4>Quick Anchors</h4>
-            <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('iac'); }}>IaC Explorer</a>
-            <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('sg-rules'); }}>Access Policies</a>
-            <a href="#" onClick={downloadPktFile}>Packet Tracer (.pkt)</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('iac'); }}>📂 IaC Explorer</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); setActiveBottomTab('sg-rules'); }}>🔒 Access Policies</a>
+            <a href="#" onClick={downloadPktFile}>📥 Packet Tracer (.pkt)</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>⬆️ Back to Top</a>
           </div>
           <div className="footer-col info">
             <h4>Intern Credentials</h4>
             <p><strong>Candidate ID:</strong> Cisco-VI-2026-9281</p>
             <p><strong>Focus Area:</strong> Cloud Security & DevSecOps</p>
             <p><strong>System Link:</strong> <span className="status-indicator-green">Tunnel Secured</span></p>
+            <p style={{ marginTop: '6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>Built with Next.js • React • SVG Animation Engine</p>
           </div>
         </div>
         <div className="footer-bottom">
-          <p>© 2026 Cisco Virtual Internship. Verified against Phase 8 project rules.</p>
-          <a href="#" onClick={(e) => { e.preventDefault(); resetSimulation(); }}>Restore Security Matrix</a>
+          <p>© 2026 Cisco Virtual Internship — | Designed & Built With ❤️ by <strong>Krishna Mohan</strong></p>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <a href="#" onClick={(e) => { e.preventDefault(); resetSimulation(); }}>🔁 Restore Security Matrix</a>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>v2.0</span>
+          </div>
         </div>
       </footer>
     </div>

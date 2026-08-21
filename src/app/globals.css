@@ -40,6 +40,13 @@
   padding: 0;
 }
 
+/* Hide Next.js dev indicator (the "N" logo in bottom-left) */
+[data-nextjs-dialog-overlay],
+nextjs-portal,
+[data-nextjs-toast] {
+  display: none !important;
+}
+
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -71,15 +78,36 @@ body::after {
 
 /* Animations */
 @keyframes pulseGlow {
-  0% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 180, 216, 0.25); }
-  50% { transform: scale(1.04); box-shadow: 0 0 25px rgba(0, 180, 216, 0.55); }
-  100% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 180, 216, 0.25); }
+  0% {
+    stroke-opacity: 0.5;
+    stroke-width: 2px;
+  }
+  50% {
+    stroke-opacity: 1;
+    stroke-width: 3px;
+  }
+  100% {
+    stroke-opacity: 0.5;
+    stroke-width: 2px;
+  }
 }
 
 @keyframes pulseRed {
-  0% { transform: scale(1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.35); }
-  50% { transform: scale(1.06); box-shadow: 0 0 28px rgba(239, 68, 68, 0.7); }
-  100% { transform: scale(1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.35); }
+  0% {
+    stroke-opacity: 0.4;
+    stroke-width: 2px;
+    fill-opacity: 0.06;
+  }
+  50% {
+    stroke-opacity: 1;
+    stroke-width: 4px;
+    fill-opacity: 0.16;
+  }
+  100% {
+    stroke-opacity: 0.4;
+    stroke-width: 2px;
+    fill-opacity: 0.06;
+  }
 }
 
 @keyframes slideUp {
@@ -357,14 +385,20 @@ header {
 }
 
 .network-node:hover circle {
-  fill: var(--bg-tertiary) !important;
-  stroke-width: 3.5px !important;
-  filter: drop-shadow(0 0 8px var(--cisco-blue-glow));
+  stroke-width: 3px !important;
+  stroke: var(--accent-cyan) !important;
+  filter: drop-shadow(0 0 12px rgba(0, 180, 216, 0.5));
 }
 
 .network-node:hover rect {
-  fill: var(--bg-tertiary) !important;
-  stroke-width: 3.5px !important;
+  stroke-width: 3px !important;
+  stroke: var(--accent-cyan) !important;
+  filter: drop-shadow(0 0 12px rgba(0, 180, 216, 0.35));
+}
+
+.network-node:hover .threat {
+  stroke: var(--danger) !important;
+  filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.65)) !important;
 }
 
 .network-node text {
@@ -478,7 +512,7 @@ header {
   color: #c5c9db;
   display: flex;
   flex-direction: column;
-  height: 380px;
+  height: 500px;
   overflow: hidden;
   box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
 }
@@ -982,5 +1016,42 @@ header {
 @keyframes flowDash {
   to {
     stroke-dashoffset: -24;
+  }
+}
+
+.live-pulse-indicator {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  animation: pulseBlink 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseBlink {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+.live-ticking-dot {
+  animation: pulseScale 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes pulseScale {
+  0% { r: 3px; }
+  100% { r: 4.5px; }
+}
+
+/* Responsive grid for Node Inspector & Live Telemetry */
+.inspector-telemetry-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .inspector-telemetry-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
